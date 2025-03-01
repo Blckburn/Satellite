@@ -1,0 +1,105 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup>
+    <Filter Include="Source Files">
+      <UniqueIdentifier>{4FC737F1-C7A5-4376-A066-2A32D752A2FF}</UniqueIdentifier>
+      <Extensions>cpp;c;cc;cxx;c++;cppm;ixx;def;odl;idl;hpj;bat;asm;asmx</Extensions>
+    </Filter>
+    <Filter Include="Header Files">
+      <UniqueIdentifier>{93995380-89BD-4b04-88EB-625FBE52EBFB}</UniqueIdentifier>
+      <Extensions>h;hh;hpp;hxx;h++;hm;inl;inc;ipp;xsd</Extensions>
+    </Filter>
+    <Filter Include="Resource Files">
+      <UniqueIdentifier>{67DA6AB6-F800-4c08-8B7A-83BB121AAD01}</UniqueIdentifier>
+      <Extensions>rc;ico;cur;bmp;dlg;rc2;rct;bin;rgs;gif;jpg;jpeg;jpe;resx;tiff;tif;png;wav;mfcribbon-ms</Extensions>
+    </Filter>
+    <Filter Include="include">
+      <UniqueIdentifier>{ea964b15-ace0-4fda-b637-fb4a0f4e7d43}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="src">
+      <UniqueIdentifier>{69e59da6-db38-498f-8549-3cef8e6fc8fb}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="assets">
+      <UniqueIdentifier>{6ef05de8-564d-423b-8ff3-1f88c58462b1}</UniqueIdentifier>
+    </Filter>
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="Engine.h">
+      <Filter>include</Filter>
+    </ClInclude>
+    <ClInclude Include="Scene.h">
+      <Filter>include</Filter>
+    </ClInclude>
+    <ClInclude Include="Entity.h">
+      <Filter>include</Filter>
+    </ClInclude>
+    <ClInclude Include="TestScene.h">
+      <Filter>include</Filter>
+    </ClInclude>
+    <ClInclude Include="IsometricRenderer.h">
+      <Filter>include</Filter>
+    </ClInclude>
+    <ClInclude Include="Camera.h">
+      <Filter>include</Filter>
+    </ClInclude>
+    <ClInclude Include="ResourceManager.h">
+      <Filter>include</Filter>
+    </ClInclude>
+    <ClInclude Include="RenderableTile.h">
+      <Filter>include</Filter>
+    </ClInclude>
+    <ClInclude Include="TileRenderer.h">
+      <Filter>include</Filter>
+    </ClInclude>
+    <ClInclude Include="TileType.h">
+      <Filter>include</Filter>
+    </ClInclude>
+    <ClInclude Include="MapTile.h">
+      <Filter>include</Filter>
+    </ClInclude>
+    <ClInclude Include="TileMap.h">
+      <Filter>include</Filter>
+    </ClInclude>
+    <ClInclude Include="MapScene.h">
+      <Filter>include</Filter>
+    </ClInclude>
+  </ItemGroup>
+  <ItemGroup>
+    <ClCompile Include="Engine.cpp">
+      <Filter>src</Filter>
+    </ClCompile>
+    <ClCompile Include="Scene.cpp">
+      <Filter>src</Filter>
+    </ClCompile>
+    <ClCompile Include="Entity.cpp">
+      <Filter>src</Filter>
+    </ClCompile>
+    <ClCompile Include="main.cpp">
+      <Filter>src</Filter>
+    </ClCompile>
+    <ClCompile Include="TestScene.cpp">
+      <Filter>src</Filter>
+    </ClCompile>
+    <ClCompile Include="IsometricRenderer.cpp">
+      <Filter>src</Filter>
+    </ClCompile>
+    <ClCompile Include="Camera.cpp">
+      <Filter>src</Filter>
+    </ClCompile>
+    <ClCompile Include="ResourceManager.cpp">
+      <Filter>src</Filter>
+    </ClCompile>
+    <ClCompile Include="TileRenderer.cpp">
+      <Filter>src</Filter>
+    </ClCompile>
+    <ClCompile Include="MapTile.cpp">
+      <Filter>src</Filter>
+    </ClCompile>
+    <ClCompile Include="TileMap.cpp">
+      <Filter>src</Filter>
+    </ClCompile>
+    <ClCompile Include="MapScene.cpp">
+      <Filter>src</Filter>
+    </ClCompile>
+  </ItemGroup>
+</Project>
