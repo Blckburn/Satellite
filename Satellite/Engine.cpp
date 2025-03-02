@@ -143,18 +143,34 @@ void Engine::update() {
 }
 
 void Engine::render() {
-    // 1. Устанавливаем темно-зеленый цвет фона для лучшего визуального соответствия с тайлами травы
-    // Этот цвет близок к цвету травы, что сделает черные артефакты менее заметными
-    SDL_SetRenderDrawColor(m_renderer, 30, 45, 30, 255);
-    SDL_RenderClear(m_renderer);
+        // 1. Выбираем цвет фона в зависимости от текущего биома
+        switch (m_currentBiome) {
+        case 1: // FOREST
+            SDL_SetRenderDrawColor(m_renderer, 10, 20, 10, 255);
+            break;
+        case 2: // DESERT
+            SDL_SetRenderDrawColor(m_renderer, 20, 15, 10, 255);
+            break;
+        case 3: // TUNDRA
+            SDL_SetRenderDrawColor(m_renderer, 10, 15, 20, 255);
+            break;
+        case 4: // VOLCANIC
+            SDL_SetRenderDrawColor(m_renderer, 20, 10, 10, 255);
+            break;
+        default:
+            SDL_SetRenderDrawColor(m_renderer, 30, 45, 30, 255);
+            break;
+        }
 
-    // 2. Отрисовка активной сцены, если она существует
-    if (m_activeScene) {
-        m_activeScene->render(m_renderer);
-    }
+        SDL_RenderClear(m_renderer);
 
-    // 3. Вывод отрисованного кадра на экран
-    SDL_RenderPresent(m_renderer);
+        // 2. Отрисовка активной сцены, если она существует
+        if (m_activeScene) {
+            m_activeScene->render(m_renderer);
+        }
+
+        // 3. Вывод отрисованного кадра на экран
+        SDL_RenderPresent(m_renderer);
 }
 
 void Engine::calculateDeltaTime() {

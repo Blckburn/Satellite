@@ -505,3 +505,10 @@ void IsometricRenderer::renderVolumetricTileWithTextures(SDL_Renderer* renderer,
     SDL_RenderDrawLine(renderer, topFace[1].x, topFace[1].y, rightFace[2].x, rightFace[2].y);
     SDL_RenderDrawLine(renderer, topFace[2].x, topFace[2].y, leftFace[2].x, leftFace[2].y);
 }
+
+void IsometricRenderer::renderFlatTile(SDL_Renderer* renderer, float x, float y,
+    SDL_Texture* texture, SDL_Color color,
+    int centerX, int centerY) {
+    // Просто вызываем существующий метод renderTile с нулевой высотой
+    renderTile(renderer, x, y, 0.0f, color, centerX, centerY);
+}

@@ -14,6 +14,12 @@ class ResourceManager;
 class Engine {
 public:
     /**
+* @brief Установка текущего биома для визуализации
+* @param biomeType Тип биома
+*/
+    void setCurrentBiome(int biomeType) { m_currentBiome = biomeType; }
+
+    /**
      * @brief Конструктор движка
      * @param title Заголовок окна
      * @param width Ширина окна
@@ -93,6 +99,7 @@ private:
      */
     void calculateDeltaTime();
 
+
 private:
     std::string m_title;           ///< Заголовок окна
     int m_width;                   ///< Ширина окна
@@ -107,4 +114,6 @@ private:
 
     std::chrono::time_point<std::chrono::high_resolution_clock> m_lastFrameTime;  ///< Время последнего кадра
     float m_deltaTime;             ///< Время между кадрами
+    int m_currentBiome = 0; ///< Текущий биом для визуализации
+
 };

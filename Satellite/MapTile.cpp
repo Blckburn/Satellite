@@ -60,7 +60,42 @@ void MapTile::setType(TileType type) {
         m_height = 0.1f;  // Меньшая высота для лучшего визуального эффекта
         m_walkable = false; // Вода всегда непроходима
         break;
-        // остальные case без изменений...
+    case TileType::SAND:
+        m_color = { 240, 220, 130, 255 }; // Песочный
+        m_height = GetDefaultHeight(type);
+        m_walkable = IsWalkable(type);
+        break;
+    case TileType::SNOW:
+        m_color = { 240, 240, 250, 255 }; // Белый снег
+        m_height = GetDefaultHeight(type);
+        m_walkable = IsWalkable(type);
+        break;
+    case TileType::ICE:
+        m_color = { 200, 220, 255, 255 }; // Светло-голубой лед
+        m_height = GetDefaultHeight(type);
+        m_walkable = IsWalkable(type);
+        break;
+    case TileType::ROCK_FORMATION:
+        m_color = { 120, 110, 100, 255 }; // Серо-коричневые скалы
+        m_height = GetDefaultHeight(type);
+        m_walkable = IsWalkable(type);
+        break;
+    case TileType::LAVA:
+        m_color = { 255, 70, 0, 255 }; // Более яркая оранжево-красная лава
+        m_height = GetDefaultHeight(type);
+        m_walkable = IsWalkable(type);
+        break;
+    case TileType::FOREST:
+        m_color = { 20, 80, 20, 255 }; // Еще более темно-зеленый лес
+        m_height = GetDefaultHeight(type);
+        m_walkable = IsWalkable(type);
+        break;
+    case TileType::GRASS:
+        m_color = { 100, 180, 100, 255 }; // Ярко-зеленый для травы
+        break;
+    case TileType::STONE:
+        m_color = { 100, 100, 100, 255 }; // Средне-серый
+        break;
     }
 }
 

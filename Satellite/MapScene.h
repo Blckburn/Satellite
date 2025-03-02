@@ -126,7 +126,16 @@ public:
      */
     void renderPlayer(SDL_Renderer* renderer, int centerX, int centerY, float priority);
 
+    /**
+ * @brief Получение текущего биома
+ * @return Номер текущего биома
+ */
+    int getCurrentBiome() const { return m_currentBiome; }
+
 private:
+
+    int m_currentBiome = 0;  ///< Текущий биом карты
+
     /**
      * @brief Проверяет возможность диагонального перемещения
      * @param fromX Начальная X координата

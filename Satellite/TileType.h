@@ -18,12 +18,12 @@ enum class TileType {
     WOOD,       ///< Дерево
     SPECIAL,    ///< Специальный тайл (телепорт, ловушка и т.д.)
     OBSTACLE,   ///< Непроходимое препятствие
-    SAND,            // Добавить
-    SNOW,            // Добавить
-    ICE,             // Добавить
-    ROCK_FORMATION,  // Добавить
-    LAVA,            // Добавить
-    FOREST           // Уже есть
+    SAND,            // Песок
+    SNOW,            // Снег
+    ICE,             // Лед
+    ROCK_FORMATION,  // Скалы
+    LAVA,            // Лава
+    FOREST           // Лес
 };
 
 /**
@@ -45,6 +45,12 @@ inline std::string TileTypeToString(TileType type) {
     case TileType::WOOD: return "Wood";
     case TileType::SPECIAL: return "Special";
     case TileType::OBSTACLE: return "Obstacle";
+    case TileType::SAND: return "Sand";
+    case TileType::SNOW: return "Snow";
+    case TileType::ICE: return "Ice";
+    case TileType::ROCK_FORMATION: return "Rock Formation";
+    case TileType::LAVA: return "Lava";
+    case TileType::FOREST: return "Forest";
     default: return "Unknown";
     }
 }
@@ -61,14 +67,20 @@ inline bool IsWalkable(TileType type) {
     case TileType::STONE:
     case TileType::METAL:
     case TileType::WOOD:
+    case TileType::SAND:     // Песок проходим
+    case TileType::SNOW:     // Снег проходим
         return true;
     case TileType::EMPTY:
     case TileType::WALL:
-    case TileType::WATER:  // ПОДТВЕРЖДЕНО: Вода должна быть непроходимой
+    case TileType::WATER:    // Вода непроходима
     case TileType::GLASS:
     case TileType::OBSTACLE:
-    case TileType::SPECIAL: // Специальные тайлы могут быть как проходимыми, так и нет
-    case TileType::DOOR:    // Двери могут быть закрыты
+    case TileType::SPECIAL:  // Специальные тайлы могут быть как проходимыми, так и нет
+    case TileType::DOOR:     // Двери могут быть закрыты
+    case TileType::ICE:      // Лед непроходим
+    case TileType::ROCK_FORMATION: // Скалы непроходимы
+    case TileType::LAVA:     // Лава непроходима
+    case TileType::FOREST:   // Лес непроходим
         return false;
     default:
         return false;
@@ -90,11 +102,17 @@ inline bool IsTransparent(TileType type) {
     case TileType::WOOD:
     case TileType::WATER:
     case TileType::GLASS:
+    case TileType::SAND:     // Песок прозрачен
+    case TileType::SNOW:     // Снег прозрачен
+    case TileType::ICE:      // Лед прозрачен
         return true;
     case TileType::WALL:
     case TileType::OBSTACLE:
-    case TileType::SPECIAL: // Зависит от конкретного типа специального тайла
-    case TileType::DOOR:    // Двери могут быть прозрачными или нет
+    case TileType::SPECIAL:  // Зависит от конкретного типа специального тайла
+    case TileType::DOOR:     // Двери могут быть прозрачными или нет
+    case TileType::ROCK_FORMATION: // Скалы непрозрачны
+    case TileType::LAVA:     // Лава непрозрачна
+    case TileType::FOREST:   // Лес непрозрачен
         return false;
     default:
         return false;
@@ -115,11 +133,19 @@ inline float GetDefaultHeight(TileType type) {
     case TileType::DOOR:
         return 1.0f;  // Полная высота для дверей
     case TileType::WATER:
-        return 0.1f;  // Пониженная высота для воды (была 0.2f)
+        return 0.1f;  // Пониженная высота для воды
     case TileType::GLASS:
         return 0.8f;  // Высота для стеклянных перегородок
     case TileType::SPECIAL:
         return 0.3f;  // Средняя высота для специальных тайлов
+    case TileType::ROCK_FORMATION:
+        return 1.0f;  // Полная высота для скал
+    case TileType::LAVA:
+        return 0.2f;  // Небольшая высота для лавы
+    case TileType::FOREST:
+        return 1.0f;  // Полная высота для леса
+    case TileType::ICE:
+        return 0.5f;  // Средняя высота для льда
 
         // Все плоские тайлы имеют высоту ровно 0.0f
     case TileType::GRASS:
@@ -127,6 +153,8 @@ inline float GetDefaultHeight(TileType type) {
     case TileType::METAL:
     case TileType::WOOD:
     case TileType::FLOOR:
+    case TileType::SAND:     // Песок плоский
+    case TileType::SNOW:     // Снег плоский
         return 0.0f;  // Плоские тайлы
 
     case TileType::EMPTY:

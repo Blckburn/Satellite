@@ -217,6 +217,21 @@ public:
     float getCameraZoom() const { return m_cameraZoom; }
 
     void renderTexturedDiamond(SDL_Renderer* renderer, SDL_Texture* texture, SDL_Point* points) const;
+
+    /**
+ * @brief Отрисовка плоского тайла (обертка для renderTile)
+ * @param renderer SDL рендерер
+ * @param x X координата в мировом пространстве
+ * @param y Y координата в мировом пространстве
+ * @param texture Текстура для отрисовки (может быть nullptr)
+ * @param color Цвет для отрисовки, если текстура отсутствует
+ * @param centerX X координата центра экрана (по умолчанию 0)
+ * @param centerY Y координата центра экрана (по умолчанию 0)
+ */
+    void renderFlatTile(SDL_Renderer* renderer, float x, float y,
+        SDL_Texture* texture, SDL_Color color,
+        int centerX = 0, int centerY = 0);
+
 private:
     /**
      * @brief Отрисовка заполненного полигона

@@ -10,6 +10,14 @@
  */
 class RoomGenerator {
 public:
+
+    /**
+* @brief Установка ограничений количества комнат
+* @param minRooms Минимальное количество комнат
+* @param maxRooms Максимальное количество комнат
+*/
+    void setRoomCountLimits(int minRooms, int maxRooms);
+
     /**
      * @brief Типы биомов для генерации карт
      */
@@ -169,10 +177,15 @@ private:
      */
     RoomType getBiomeRoomType(BiomeType biomeType);
 
+
+
 private:
     unsigned int m_seed;            ///< Сид генератора
     std::mt19937 m_rng;             ///< Генератор случайных чисел
     int m_maxRoomSize;              ///< Максимальный размер комнаты
     int m_minRoomSize;              ///< Минимальный размер комнаты
     int m_maxCorridorLength;        ///< Максимальная длина коридора
+    int m_minRooms;  ///< Минимальное количество комнат
+    int m_maxRooms;  ///< Максимальное количество комнат
+
 };

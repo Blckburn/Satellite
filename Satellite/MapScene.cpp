@@ -289,22 +289,102 @@ void MapScene::generateTestMap() {
     // Создаем генератор комнат с случайным сидом
     static RoomGenerator roomGen(static_cast<unsigned int>(std::time(nullptr)));
 
+   
     // Устанавливаем размеры комнат в зависимости от размера карты
     int minSize = std::max(5, m_tileMap->getWidth() / 10);
     int maxSize = std::max(minSize + 5, m_tileMap->getWidth() / 5);
     roomGen.setRoomSizeLimits(minSize, maxSize);
+    roomGen.setRoomCountLimits(5, 10); // Минимум 5, максимум 10 комнат
 
     // Выбираем случайный тип биома для генерации
-    RoomGenerator::BiomeType biomeType = static_cast<RoomGenerator::BiomeType>(std::rand() % 4 + 1);
+    srand(static_cast<unsigned int>(time(nullptr)));
+    int biomeIndex = rand() % 4 + 1; // 1-4 (FOREST, DESERT, TUNDRA, VOLCANIC)
+    RoomGenerator::BiomeType biomeType = static_cast<RoomGenerator::BiomeType>(biomeIndex);
+    m_currentBiome = biomeIndex; // Запоминаем текущий биом
+
+    // Устанавливаем биом и в движке для фона
+    if (m_engine) {
+        m_engine->setCurrentBiome(biomeIndex);
+    }
+    std::string biomeName;
+    switch (biomeType) {
+    case RoomGenerator::BiomeType::FOREST:
+        biomeName = "Forest";
+        break;
+    case RoomGenerator::BiomeType::DESERT:
+        biomeName = "Desert";
+        break;
+    case RoomGenerator::BiomeType::TUNDRA:
+        biomeName = "Tundra";
+        break;
+    case RoomGenerator::BiomeType::VOLCANIC:
+        biomeName = "Volcanic";
+        break;
+    default:
+        biomeName = "Default";
+        break;
+    }
+    LOG_INFO("Selected biome: " + biomeName + " (type " + std::to_string(biomeIndex) + ")");
 
     // Генерируем карту
     roomGen.generateMap(m_tileMap.get(), biomeType);
 
-    // Устанавливаем позицию игрока в центре карты
-    m_playerX = m_tileMap->getWidth() / 2.0f;
-    m_playerY = m_tileMap->getHeight() / 2.0f;
-    m_playerSubX = 0.0f;
-    m_playerSubY = 0.0f;
+    // Сначала устанавливаем позицию игрока в центре карты
+    float centerX = m_tileMap->getWidth() / 2.0f;
+    float centerY = m_tileMap->getHeight() / 2.0f;
+
+    // Но нам нужно убедиться, что игрок появляется на проходимом тайле
+    // Ищем ближайший проходимый тайл к центру
+    int searchRadius = 10; // Максимальный радиус поиска
+    bool foundWalkable = false;
+
+    // Сначала проверяем сам центральный тайл
+    int centerTileX = static_cast<int>(centerX);
+    int centerTileY = static_cast<int>(centerY);
+
+    if (m_tileMap->isValidCoordinate(centerTileX, centerTileY) &&
+        m_tileMap->isTileWalkable(centerTileX, centerTileY)) {
+        // Центральный тайл проходим, используем его
+        m_playerX = centerX;
+        m_playerY = centerY;
+        foundWalkable = true;
+    }
+    else {
+        // Центральный тайл непроходим, ищем проходимый тайл рядом
+        for (int radius = 1; radius <= searchRadius && !foundWalkable; radius++) {
+            // Проверяем тайлы вокруг центра по спирали
+            for (int dx = -radius; dx <= radius && !foundWalkable; dx++) {
+                for (int dy = -radius; dy <= radius && !foundWalkable; dy++) {
+                    // Пропускаем тайлы, не находящиеся на границе текущего радиуса
+                    if (std::abs(dx) != radius && std::abs(dy) != radius) continue;
+
+                    int x = centerTileX + dx;
+                    int y = centerTileY + dy;
+
+                    if (m_tileMap->isValidCoordinate(x, y) &&
+                        m_tileMap->isTileWalkable(x, y)) {
+                        // Нашли проходимый тайл
+                        m_playerX = static_cast<float>(x);
+                        m_playerY = static_cast<float>(y);
+                        foundWalkable = true;
+                        break;
+                    }
+                }
+            }
+        }
+    }
+
+    // Если проходимый тайл не найден, устанавливаем игрока в центре карты
+    // и надеемся на лучшее (редкий случай)
+    if (!foundWalkable) {
+        m_playerX = centerX;
+        m_playerY = centerY;
+        LOG_WARNING("Could not find walkable tile for player spawn, using center position");
+    }
+
+    // Сбрасываем субкоординаты
+    m_playerSubX = 0.5f;
+    m_playerSubY = 0.5f;
 
     LOG_INFO("Generated test map with biome type: " + std::to_string(static_cast<int>(biomeType)));
 }
