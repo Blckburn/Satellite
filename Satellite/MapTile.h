@@ -2,6 +2,8 @@
 
 #include "TileType.h"
 #include <string>
+#include <vector>
+#include <sstream>
 #include <SDL.h>
 
 /**
@@ -9,6 +11,20 @@
  */
 class MapTile {
 public:
+    /**
+     * @brief Структура для хранения декоративного элемента
+     */
+    struct Decoration {
+        int id;            // Идентификатор декорации
+        std::string name;  // Название
+        float scale;       // Масштаб (1.0 = нормальный размер)
+        bool animated;     // Имеет ли анимацию
+
+        Decoration(int _id = 0, const std::string& _name = "", float _scale = 1.0f, bool _animated = false)
+            : id(_id), name(_name), scale(_scale), animated(_animated) {
+        }
+    };
+
     /**
      * @brief Конструктор по умолчанию (создает пустой тайл)
      */
@@ -21,7 +37,7 @@ public:
     MapTile(TileType type);
 
     /**
-     * @brief Конструктор с полной инициализацией
+     * @brief Конструктор с полной инициализацией базовых свойств
      * @param type Тип тайла
      * @param walkable Признак проходимости
      * @param transparent Признак прозрачности
@@ -100,22 +116,129 @@ public:
      */
     std::string toString() const;
 
+    // Новые методы для планетарных характеристик
+
     /**
      * @brief Проверка, является ли тайл водой
      * @return true, если тайл является водой, false в противном случае
      */
-    bool isWater() const { return m_type == TileType::WATER; }
+    bool isWater() const { return IsWater(m_type); }
+
+    /**
+     * @brief Получение идентификатора биома
+     * @return Идентификатор биома
+     */
+    int getBiomeId() const { return m_biomeId; }
+
+    /**
+     * @brief Установка идентификатора биома
+     * @param biomeId Идентификатор биома
+     */
+    void setBiomeId(int biomeId) { m_biomeId = biomeId; }
+
+    /**
+     * @brief Получение температуры
+     * @return Температура тайла
+     */
+    float getTemperature() const { return m_temperature; }
+
+    /**
+     * @brief Установка температуры
+     * @param temperature Температура тайла
+     */
+    void setTemperature(float temperature) { m_temperature = temperature; }
+
+    /**
+     * @brief Получение влажности
+     * @return Влажность тайла
+     */
+    float getHumidity() const { return m_humidity; }
+
+    /**
+     * @brief Установка влажности
+     * @param humidity Влажность тайла
+     */
+    void setHumidity(float humidity) { m_humidity = humidity; }
+
+    /**
+     * @brief Получение высоты рельефа
+     * @return Высота рельефа (0.0 - 1.0)
+     */
+    float getElevation() const { return m_elevation; }
+
+    /**
+     * @brief Установка высоты рельефа
+     * @param elevation Высота рельефа (0.0 - 1.0)
+     */
+    void setElevation(float elevation) { m_elevation = elevation; }
+
+    /**
+     * @brief Получение уровня радиации
+     * @return Уровень радиации (0.0 - 1.0)
+     */
+    float getRadiationLevel() const { return m_radiationLevel; }
+
+    /**
+     * @brief Установка уровня радиации
+     * @param level Уровень радиации (0.0 - 1.0)
+     */
+    void setRadiationLevel(float level) { m_radiationLevel = level; }
+
+    /**
+     * @brief Добавление декоративного элемента
+     * @param decoration Декоративный элемент
+     */
+    void addDecoration(const Decoration& decoration) { m_decorations.push_back(decoration); }
+
+    /**
+     * @brief Удаление декоративного элемента по ID
+     * @param decorationId ID декоративного элемента
+     * @return true если элемент был найден и удален, false в противном случае
+     */
+    bool removeDecoration(int decorationId);
+
+    /**
+     * @brief Получение всех декоративных элементов
+     * @return Вектор декоративных элементов
+     */
+    const std::vector<Decoration>& getDecorations() const { return m_decorations; }
+
+    /**
+     * @brief Очистка всех декоративных элементов
+     */
+    void clearDecorations() { m_decorations.clear(); }
+
+    /**
+     * @brief Проверка наличия опасности
+     * @return true, если тайл опасен, false в противном случае
+     */
+    bool isHazardous() const { return IsHazardous(m_type) || m_radiationLevel > 0.3f; }
+
+    /**
+     * @brief Получение плотности ресурсов
+     * @return Плотность ресурсов (0.0 - 1.0)
+     */
+    float getResourceDensity() const { return m_resourceDensity; }
+
+    /**
+     * @brief Установка плотности ресурсов
+     * @param density Плотность ресурсов (0.0 - 1.0)
+     */
+    void setResourceDensity(float density) { m_resourceDensity = density; }
 
 private:
-    TileType m_type;       ///< Тип тайла
-    bool m_walkable;       ///< Признак проходимости
-    bool m_transparent;    ///< Признак прозрачности
-    float m_height;        ///< Высота тайла
-    SDL_Color m_color;     ///< Цвет для рендеринга
+    TileType m_type;           ///< Тип тайла
+    bool m_walkable;           ///< Признак проходимости
+    bool m_transparent;        ///< Признак прозрачности
+    float m_height;            ///< Высота тайла (для 3D отображения)
+    SDL_Color m_color;         ///< Цвет для рендеринга
 
-    // Дополнительные свойства, которые могут быть добавлены позже:
-    // bool m_destructible;  ///< Может ли тайл быть разрушен
-    // bool m_flammable;     ///< Может ли тайл гореть
-    // float m_friction;     ///< Трение поверхности
-    // int m_hardness;       ///< Прочность тайла
+    // Новые свойства для планетарных поверхностей
+    int m_biomeId = 0;                       ///< Идентификатор биома
+    float m_temperature = 20.0f;             ///< Температура в градусах Цельсия
+    float m_humidity = 0.5f;                 ///< Влажность (0.0 - 1.0)
+    float m_elevation = 0.0f;                ///< Высота рельефа (0.0 - 1.0)
+    float m_radiationLevel = 0.0f;           ///< Уровень радиации (0.0 - 1.0)
+    float m_resourceDensity = 0.0f;          ///< Плотность ресурсов (0.0 - 1.0)
+    std::vector<Decoration> m_decorations;   ///< Декоративные элементы на тайле
 };

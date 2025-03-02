@@ -63,6 +63,18 @@
     <ClInclude Include="MapScene.h">
       <Filter>include</Filter>
     </ClInclude>
+    <ClInclude Include="Biome.h">
+      <Filter>include</Filter>
+    </ClInclude>
+    <ClInclude Include="MapGenerator.h">
+      <Filter>include</Filter>
+    </ClInclude>
+    <ClInclude Include="WorldGenerator.h">
+      <Filter>include</Filter>
+    </ClInclude>
+    <ClInclude Include="PlanetScene.h">
+      <Filter>include</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="Engine.cpp">
@@ -99,6 +111,18 @@
       <Filter>src</Filter>
     </ClCompile>
     <ClCompile Include="MapScene.cpp">
+      <Filter>src</Filter>
+    </ClCompile>
+    <ClCompile Include="Biome.cpp">
+      <Filter>src</Filter>
+    </ClCompile>
+    <ClCompile Include="MapGenerator.cpp">
+      <Filter>src</Filter>
+    </ClCompile>
+    <ClCompile Include="WorldGenerator.cpp">
+      <Filter>src</Filter>
+    </ClCompile>
+    <ClCompile Include="PlanetScene.cpp">
       <Filter>src</Filter>
     </ClCompile>
   </ItemGroup>

@@ -139,12 +139,15 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
+    <ClInclude Include="Biome.h" />
     <ClInclude Include="Camera.h" />
     <ClInclude Include="Engine.h" />
     <ClInclude Include="Entity.h" />
     <ClInclude Include="IsometricRenderer.h" />
+    <ClInclude Include="MapGenerator.h" />
     <ClInclude Include="MapScene.h" />
     <ClInclude Include="MapTile.h" />
+    <ClInclude Include="PlanetScene.h" />
     <ClInclude Include="RenderableTile.h" />
     <ClInclude Include="ResourceManager.h" />
     <ClInclude Include="Scene.h" />
@@ -152,20 +155,25 @@
     <ClInclude Include="TileMap.h" />
     <ClInclude Include="TileRenderer.h" />
     <ClInclude Include="TileType.h" />
+    <ClInclude Include="WorldGenerator.h" />
   </ItemGroup>
   <ItemGroup>
+    <ClCompile Include="Biome.cpp" />
     <ClCompile Include="Camera.cpp" />
     <ClCompile Include="Engine.cpp" />
     <ClCompile Include="Entity.cpp" />
     <ClCompile Include="IsometricRenderer.cpp" />
     <ClCompile Include="main.cpp" />
+    <ClCompile Include="MapGenerator.cpp" />
     <ClCompile Include="MapScene.cpp" />
     <ClCompile Include="MapTile.cpp" />
+    <ClCompile Include="PlanetScene.cpp" />
     <ClCompile Include="ResourceManager.cpp" />
     <ClCompile Include="Scene.cpp" />
     <ClCompile Include="TestScene.cpp" />
     <ClCompile Include="TileMap.cpp" />
     <ClCompile Include="TileRenderer.cpp" />
+    <ClCompile Include="WorldGenerator.cpp" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">
