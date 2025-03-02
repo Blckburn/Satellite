@@ -17,14 +17,18 @@ Camera::~Camera() {
 void Camera::update(float deltaTime) {
     // Если есть целевой объект для слежения
     if (m_targetX && m_targetY) {
-        // Плавно перемещаем камеру к цели
+        // Проверка на NaN
         float targetX = *m_targetX;
         float targetY = *m_targetY;
 
-        // Интерполяция позиции с более плавным коэффициентом
-        // Уменьшаем с 2.0f до 1.0f для более плавного следования
-        m_x += (targetX - m_x) * 1.0f * deltaTime;
-        m_y += (targetY - m_y) * 1.0f * deltaTime;
+        if (std::isnan(targetX) || std::isnan(targetY)) {
+            return;
+        }
+
+        // Плавно перемещаем камеру к цели
+        float interp = 1.0f * deltaTime;
+        m_x += (targetX - m_x) * interp;
+        m_y += (targetY - m_y) * interp;
     }
 }
 

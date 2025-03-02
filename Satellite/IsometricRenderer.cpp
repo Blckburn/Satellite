@@ -13,56 +13,38 @@ IsometricRenderer::~IsometricRenderer() {
 }
 
 void IsometricRenderer::worldToScreen(float worldX, float worldY, int& screenX, int& screenY) const {
+    // Проверка на некорректные входные данные
+    if (std::isnan(worldX) || std::isnan(worldY)) {
+        screenX = 0;
+        screenY = 0;
+        return;
+    }
+
     // Применяем смещение камеры
     float offsetX = worldX - m_cameraX;
     float offsetY = worldY - m_cameraY;
 
-    // Изометрическое преобразование с учетом масштаба
-    screenX = static_cast<int>((offsetX - offsetY) * (m_tileWidth / 2.0f) * m_cameraZoom);
-    screenY = static_cast<int>((offsetX + offsetY) * (m_tileHeight / 2.0f) * m_cameraZoom);
-}
+    // Основное изометрическое преобразование с учетом масштаба
+    float fScreenX = (offsetX - offsetY) * (m_tileWidth / 2.0f) * m_cameraZoom;
+    float fScreenY = (offsetX + offsetY) * (m_tileHeight / 2.0f) * m_cameraZoom;
 
-void IsometricRenderer::screenToWorld(int screenX, int screenY, float& worldX, float& worldY) const {
-    // Обратное изометрическое преобразование с учетом масштаба
-    float scaledScreenX = screenX / m_cameraZoom;
-    float scaledScreenY = screenY / m_cameraZoom;
+    // Проверка на переполнение или некорректные результаты
+    if (std::isnan(fScreenX) || std::isnan(fScreenY) ||
+        std::isinf(fScreenX) || std::isinf(fScreenY)) {
+        screenX = 0;
+        screenY = 0;
+        return;
+    }
 
-    worldX = (scaledScreenX / (m_tileWidth / 2.0f) + scaledScreenY / (m_tileHeight / 2.0f)) / 2.0f;
-    worldY = (scaledScreenY / (m_tileHeight / 2.0f) - scaledScreenX / (m_tileWidth / 2.0f)) / 2.0f;
-
-    // Применяем смещение камеры
-    worldX += m_cameraX;
-    worldY += m_cameraY;
-}
-
-void IsometricRenderer::worldToDisplay(float worldX, float worldY, float worldZ,
-    int centerX, int centerY,
-    int& displayX, int& displayY) const {
-    // Шаг 1: Преобразование из мировых в экранные координаты (без учета высоты)
-    int screenX, screenY;
-    worldToScreen(worldX, worldY, screenX, screenY);
-
-    // Шаг 2: Учет высоты (Z-координаты)
-    int heightOffset = getHeightInPixels(worldZ);
-    screenY -= heightOffset;
-
-    // Шаг 3: Преобразование в абсолютные экранные координаты с учетом центра экрана
-    displayX = screenX + centerX;
-    displayY = screenY + centerY;
-}
-
-int IsometricRenderer::getHeightInPixels(float worldHeight) const {
-    // Используем константу HEIGHT_SCALE вместо локального значения
-    return static_cast<int>(worldHeight * HEIGHT_SCALE * m_cameraZoom);
-}
-int IsometricRenderer::getScaledSize(int size) const {
-    return static_cast<int>(size * m_cameraZoom);
+    // Преобразуем в целые числа для отрисовки с округлением
+    screenX = static_cast<int>(round(fScreenX));
+    screenY = static_cast<int>(round(fScreenY));
 }
 
 void IsometricRenderer::renderTile(SDL_Renderer* renderer, float worldX, float worldY, float height,
     SDL_Color color, int centerX, int centerY) const {
     // Используем новую систему координат
-    int baseX, baseY;    // Координаты базовой точки (без учета высоты)
+    int baseX, baseY;
     worldToScreen(worldX, worldY, baseX, baseY);
 
     // Смещение центра экрана
@@ -166,6 +148,44 @@ void IsometricRenderer::renderVolumetricTile(SDL_Renderer* renderer, float world
     for (int i = 0; i < 4; ++i) {
         SDL_RenderDrawLine(renderer, rightFace[i].x, rightFace[i].y, rightFace[(i + 1) % 4].x, rightFace[(i + 1) % 4].y);
     }
+}
+
+void IsometricRenderer::screenToWorld(int screenX, int screenY, float& worldX, float& worldY) const {
+    // Обратное изометрическое преобразование с учетом масштаба
+    float scaledScreenX = screenX / m_cameraZoom;
+    float scaledScreenY = screenY / m_cameraZoom;
+
+    worldX = (scaledScreenX / (m_tileWidth / 2.0f) + scaledScreenY / (m_tileHeight / 2.0f)) / 2.0f;
+    worldY = (scaledScreenY / (m_tileHeight / 2.0f) - scaledScreenX / (m_tileWidth / 2.0f)) / 2.0f;
+
+    // Применяем смещение камеры
+    worldX += m_cameraX;
+    worldY += m_cameraY;
+}
+
+void IsometricRenderer::worldToDisplay(float worldX, float worldY, float worldZ,
+    int centerX, int centerY,
+    int& displayX, int& displayY) const {
+    // Шаг 1: Преобразование из мировых в экранные координаты (без учета высоты)
+    int screenX, screenY;
+    worldToScreen(worldX, worldY, screenX, screenY);
+
+    // Шаг 2: Учет высоты (Z-координаты)
+    int heightOffset = getHeightInPixels(worldZ);
+    screenY -= heightOffset;
+
+    // Шаг 3: Преобразование в абсолютные экранные координаты с учетом центра экрана
+    displayX = screenX + centerX;
+    displayY = screenY + centerY;
+}
+
+int IsometricRenderer::getHeightInPixels(float worldHeight) const {
+    // Используем константу HEIGHT_SCALE вместо локального значения
+    return static_cast<int>(worldHeight * HEIGHT_SCALE * m_cameraZoom);
+}
+
+int IsometricRenderer::getScaledSize(int size) const {
+    return static_cast<int>(size * m_cameraZoom);
 }
 
 void IsometricRenderer::renderGrid(SDL_Renderer* renderer, int centerX, int centerY, int gridSize, SDL_Color color) const {
@@ -485,212 +505,3 @@ void IsometricRenderer::renderVolumetricTileWithTextures(SDL_Renderer* renderer,
     SDL_RenderDrawLine(renderer, topFace[1].x, topFace[1].y, rightFace[2].x, rightFace[2].y);
     SDL_RenderDrawLine(renderer, topFace[2].x, topFace[2].y, leftFace[2].x, leftFace[2].y);
 }
-
-void IsometricRenderer::renderEnhancedVolumetricTile(SDL_Renderer* renderer,
-    float worldX, float worldY, float height,
-    SDL_Texture* topTexture,
-    SDL_Texture* leftTexture,
-    SDL_Texture* rightTexture,
-    int centerX, int centerY) const {
-
-    // 1. Проверка на плоский тайл
-    if (height <= 0.0f) {
-        // Если высота нулевая, рисуем обычный тайл
-        renderTile(renderer, worldX, worldY, 0.0f, { 150, 150, 150, 255 }, centerX, centerY);
-        return;
-    }
-
-    // 2. Получение базовых экранных координат
-    int screenX, screenY;
-    worldToScreen(worldX, worldY, screenX, screenY);
-
-    // 3. Применение смещения центра экрана
-    screenX += centerX;
-    screenY += centerY;
-
-    // 4. Вычисление высоты
-    float heightFactor = 1.5f;
-    int heightOffset = static_cast<int>(getHeightInPixels(height) * heightFactor);
-
-    // 5. Расчет размеров с учетом масштаба
-    int scaledTileWidth = static_cast<int>(m_tileWidth * m_cameraZoom);
-    int scaledTileHeight = static_cast<int>(m_tileHeight * m_cameraZoom);
-
-    // 6. Определение координат для верхней грани (ромб)
-    SDL_Point topFace[4];
-    topFace[0] = { screenX, screenY - heightOffset };                              // Верхняя вершина
-    topFace[1] = { screenX + scaledTileWidth / 2, screenY + scaledTileHeight / 2 - heightOffset }; // Правая вершина
-    topFace[2] = { screenX, screenY + scaledTileHeight - heightOffset };          // Нижняя вершина
-    topFace[3] = { screenX - scaledTileWidth / 2, screenY + scaledTileHeight / 2 - heightOffset }; // Левая вершина
-
-    // 7. Определение координат для левой грани (четырехугольник)
-    SDL_Point leftFace[4];
-    leftFace[0] = { screenX - scaledTileWidth / 2, screenY + scaledTileHeight / 2 - heightOffset }; // Верхняя левая
-    leftFace[1] = { screenX, screenY + scaledTileHeight - heightOffset }; // Верхняя правая
-    leftFace[2] = { screenX, screenY + scaledTileHeight }; // Нижняя правая
-    leftFace[3] = { screenX - scaledTileWidth / 2, screenY + scaledTileHeight / 2 }; // Нижняя левая
-
-    // 8. Определение координат для правой грани (четырехугольник)
-    SDL_Point rightFace[4];
-    rightFace[0] = { screenX, screenY + scaledTileHeight - heightOffset }; // Верхняя левая
-    rightFace[1] = { screenX + scaledTileWidth / 2, screenY + scaledTileHeight / 2 - heightOffset }; // Верхняя правая
-    rightFace[2] = { screenX + scaledTileWidth / 2, screenY + scaledTileHeight / 2 }; // Нижняя правая
-    rightFace[3] = { screenX, screenY + scaledTileHeight }; // Нижняя левая
-
-    // 9. Рисуем боковые грани
-    // 9.1 Левая грань
-    SDL_Color leftColor = { 100, 100, 100, 255 };
-    SDL_SetRenderDrawColor(renderer, leftColor.r, leftColor.g, leftColor.b, leftColor.a);
-    fillPolygon(renderer, leftFace, 4);
-
-    // 9.2 Правая грань
-    SDL_Color rightColor = { 70, 70, 70, 255 };
-    SDL_SetRenderDrawColor(renderer, rightColor.r, rightColor.g, rightColor.b, rightColor.a);
-    fillPolygon(renderer, rightFace, 4);
-
-    // 10. Верхняя грань
-    SDL_Color topColor = { 150, 150, 150, 255 };
-    SDL_SetRenderDrawColor(renderer, topColor.r, topColor.g, topColor.b, topColor.a);
-    fillPolygon(renderer, topFace, 4);
-
-    // 11. Добавляем контуры для четкости
-    SDL_SetRenderDrawColor(renderer, 20, 35, 20, 255);
-
-    // Контуры левой грани
-    for (int i = 0; i < 4; ++i) {
-        SDL_RenderDrawLine(renderer, leftFace[i].x, leftFace[i].y, leftFace[(i + 1) % 4].x, leftFace[(i + 1) % 4].y);
-    }
-
-    // Контуры правой грани
-    for (int i = 0; i < 4; ++i) {
-        SDL_RenderDrawLine(renderer, rightFace[i].x, rightFace[i].y, rightFace[(i + 1) % 4].x, rightFace[(i + 1) % 4].y);
-    }
-
-    // Контуры верхней грани
-    for (int i = 0; i < 4; ++i) {
-        SDL_RenderDrawLine(renderer, topFace[i].x, topFace[i].y, topFace[(i + 1) % 4].x, topFace[(i + 1) % 4].y);
-    }
-
-    // Вертикальные ребра
-    SDL_RenderDrawLine(renderer, topFace[3].x, topFace[3].y, leftFace[0].x, leftFace[0].y);
-    SDL_RenderDrawLine(renderer, topFace[1].x, topFace[1].y, rightFace[1].x, rightFace[1].y);
-}
-
-/**
- * @brief Отрисовка текстурированного ромба
- * @param renderer SDL рендерер
- * @param texture Текстура для отрисовки
- * @param points Массив из 4 точек, определяющих ромб
- */
- void IsometricRenderer::renderTexturedDiamond(SDL_Renderer* renderer, SDL_Texture* texture, SDL_Point* points) const {
-     // 1. Проверка на наличие текстуры
-     if (!texture) {
-         return;
-     }
-
-     // 2. Определяем границы ромба для создания текстуры-цели
-     int minX = INT_MAX, minY = INT_MAX;
-     int maxX = INT_MIN, maxY = INT_MIN;
-
-     for (int i = 0; i < 4; i++) {
-         if (points[i].x < minX) minX = points[i].x;
-         if (points[i].y < minY) minY = points[i].y;
-         if (points[i].x > maxX) maxX = points[i].x;
-         if (points[i].y > maxY) maxY = points[i].y;
-     }
-
-     // 3. Создаем целевую область для отрисовки
-     SDL_Rect destRect = {
-         minX,
-         minY,
-         maxX - minX,
-         maxY - minY
-     };
-
-     // 4. Получаем размеры текстуры
-     int textureWidth, textureHeight;
-     SDL_QueryTexture(texture, nullptr, nullptr, &textureWidth, &textureHeight);
-
-     // 5. Создаем временную текстуру для рендеринга с альфа-каналом
-     SDL_Texture* tempTexture = SDL_CreateTexture(
-         renderer,
-         SDL_PIXELFORMAT_RGBA8888,
-         SDL_TEXTUREACCESS_TARGET,
-         destRect.w,
-         destRect.h
-     );
-
-     if (!tempTexture) {
-         return;
-     }
-
-     // 6. Настраиваем параметры смешивания для временной текстуры
-     SDL_SetTextureBlendMode(tempTexture, SDL_BLENDMODE_BLEND);
-
-     // 7. Сохраняем текущую цель рендеринга и переключаемся на временную текстуру
-     SDL_Texture* oldTarget = SDL_GetRenderTarget(renderer);
-     SDL_SetRenderTarget(renderer, tempTexture);
-
-     // 8. Очищаем текстуру полностью прозрачным цветом
-     // КРИТИЧЕСКИ ВАЖНО для предотвращения черных артефактов
-     SDL_SetRenderDrawColor(renderer, 0, 0, 0, 0);
-     SDL_RenderClear(renderer);
-
-     // 9. Смещаем точки относительно временной текстуры
-     SDL_Point adjustedPoints[4];
-     for (int i = 0; i < 4; i++) {
-         adjustedPoints[i].x = points[i].x - minX;
-         adjustedPoints[i].y = points[i].y - minY;
-     }
-
-     // 10. Рисуем фигуру ромба сплошным белым цветом как маску
-     SDL_SetRenderDrawColor(renderer, 255, 255, 255, 255);
-     fillPolygon(renderer, adjustedPoints, 4);
-
-     // 11. Сохраняем эту маску как отдельную текстуру для последующего использования
-     SDL_Texture* maskTexture = SDL_CreateTexture(
-         renderer,
-         SDL_PIXELFORMAT_RGBA8888,
-         SDL_TEXTUREACCESS_TARGET,
-         destRect.w,
-         destRect.h
-     );
-
-     if (!maskTexture) {
-         SDL_SetRenderTarget(renderer, oldTarget);
-         SDL_DestroyTexture(tempTexture);
-         return;
-     }
-
-     // 12. Настраиваем маску и копируем в неё нарисованный ромб
-     SDL_SetTextureBlendMode(maskTexture, SDL_BLENDMODE_BLEND);
-     SDL_SetRenderTarget(renderer, maskTexture);
-     SDL_SetRenderDrawColor(renderer, 0, 0, 0, 0);
-     SDL_RenderClear(renderer);
-     SDL_RenderCopy(renderer, tempTexture, NULL, NULL);
-
-     // 13. Возвращаемся к временной текстуре и очищаем её
-     SDL_SetRenderTarget(renderer, tempTexture);
-     SDL_SetRenderDrawColor(renderer, 0, 0, 0, 0);
-     SDL_RenderClear(renderer);
-
-     // 14. Копируем исходную текстуру на временную
-     SDL_Rect srcRect = { 0, 0, textureWidth, textureHeight };
-     SDL_Rect dstRect = { 0, 0, destRect.w, destRect.h };
-     SDL_RenderCopy(renderer, texture, &srcRect, &dstRect);
-
-     // 15. Применяем маску с помощью MOD режима смешивания
-     SDL_SetTextureBlendMode(maskTexture, SDL_BLENDMODE_MOD);
-     SDL_RenderCopy(renderer, maskTexture, NULL, NULL);
-
-     // 16. Возвращаемся к исходному рендереру
-     SDL_SetRenderTarget(renderer, oldTarget);
-
-     // 17. Отрисовываем результат с корректным альфа-смешиванием
-     SDL_SetTextureBlendMode(tempTexture, SDL_BLENDMODE_BLEND);
-     SDL_RenderCopy(renderer, tempTexture, NULL, &destRect);
-
-     // 18. Освобождаем временные ресурсы
-     SDL_DestroyTexture(maskTexture);
-     SDL_DestroyTexture(tempTexture);
- }

@@ -19,7 +19,7 @@ public:
     } type = TileType::FLAT;
 
     // Приоритет рендеринга (более высокое значение означает, что объект будет отрисован поверх других)
-    int renderPriority = 0;
+    float renderPriority = 0.0f;  // Изменено с int на float для более точной сортировки
 
     // Текстуры (могут быть nullptr)
     SDL_Texture* topTexture = nullptr;    // Верхняя грань
@@ -32,7 +32,7 @@ public:
     SDL_Color rightColor = { 150, 150, 150, 255 };
 
     // Конструктор для плоского тайла
-    RenderableTile(float x, float y, SDL_Texture* texture, SDL_Color color, int priority = 0)
+    RenderableTile(float x, float y, SDL_Texture* texture, SDL_Color color, float priority = 0.0f)
         : worldX(x), worldY(y), worldZ(0.0f), type(TileType::FLAT),
         renderPriority(priority), topTexture(texture), topColor(color) {
     }
@@ -41,7 +41,7 @@ public:
     RenderableTile(float x, float y, float z,
         SDL_Texture* top, SDL_Texture* left, SDL_Texture* right,
         SDL_Color topCol, SDL_Color leftCol, SDL_Color rightCol,
-        int priority = 0)
+        float priority = 0.0f)
         : worldX(x), worldY(y), worldZ(z), type(TileType::VOLUMETRIC),
         renderPriority(priority), topTexture(top), leftTexture(left), rightTexture(right),
         topColor(topCol), leftColor(leftCol), rightColor(rightCol) {

@@ -1,0 +1,118 @@
+import React, { useEffect, useState } from 'react';
+import * as Tone from 'tone';
+
+const SatelliteTheme = () => {
+  const [isPlaying, setIsPlaying] = useState(false);
+
+  useEffect(() => {
+    // Создаем более героический синтезатор
+    const heroSynth = new Tone.PolySynth({
+      oscillator: {
+        type: 'sawtooth' // Более острый, героический звук
+      },
+      envelope: {
+        attack: 0.1,
+        decay: 0.2,
+        sustain: 0.5,
+        release: 0.8
+      }
+    }).toDestination();
+
+    // Эффекты для более эпического звучания
+    const chorus = new Tone.Chorus(4, 2.5, 0.5).toDestination();
+    const reverb = new Tone.Reverb(3).toDestination();
+    const distortion = new Tone.Distortion(0.3).toDestination();
+
+    // Героическая мелодическая последовательность
+    const heroMelody = new Tone.Sequence((time, note) => {
+      heroSynth.triggerAttackRelease(note, '4n', time);
+    }, [
+      ['C5', 'E5', 'G5'], 
+      ['D5', 'F5', 'A5'], 
+      ['E5', 'G5', 'B5'],
+      ['F5', 'A5', 'C6']
+    ], '2n');
+
+    // Торжественный барабанный ритм
+    const heroPercussion = new Tone.MembraneSynth({
+      pitchDecay: 0.05,
+      octaves: 10,
+      envelope: {
+        attack: 0.001,
+        decay: 0.4,
+        sustain: 0.1,
+        release: 1.4,
+      }
+    }).toDestination();
+
+    const percussionPattern = new Tone.Sequence((time, pitch) => {
+      if (pitch) {
+        heroPercussion.triggerAttackRelease(pitch, '16n', time);
+      }
+    }, [
+      'C2', null, 'G2', 'C3', 
+      null, 'D2', null, 'A2'
+    ], '4n');
+
+    // Космический фоновый шум
+    const spaceNoise = new Tone.Noise('white').toDestination();
+    spaceNoise.volume.value = -40; // Очень тихий фон
+
+    // Функция для запуска музыки
+    const startMusic = async () => {
+      await Tone.start();
+      Tone.Transport.bpm.value = 100; // Более динамичный темп
+      Tone.Transport.start();
+      heroMelody.start();
+      percussionPattern.start();
+      spaceNoise.start();
+      setIsPlaying(true);
+    };
+
+    // Функция для остановки музыки
+    const stopMusic = () => {
+      Tone.Transport.stop();
+      heroMelody.stop();
+      percussionPattern.stop();
+      spaceNoise.stop();
+      setIsPlaying(false);
+    };
+
+    // Обработчики для кнопок
+    window.startSatelliteMusic = startMusic;
+    window.stopSatelliteMusic = stopMusic;
+
+    // Очистка при размонтировании
+    return () => {
+      heroMelody.dispose();
+      percussionPattern.dispose();
+      heroSynth.dispose();
+      spaceNoise.dispose();
+    };
+  }, []);
+
+  return (
+    <div className="bg-black text-white p-4 flex flex-col items-center">
+      <h2 className="text-xl mb-4">Satellite: Героическая тема исследователей</h2>
+      <p className="mb-4 text-center text-sm">
+        Музыка передает дух первопроходцев, устремленных в неизведанное
+      </p>
+      <div className="flex space-x-4">
+        <button 
+          onClick={() => window.startSatelliteMusic()}
+          className="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded transition duration-300 transform hover:scale-105"
+        >
+          🚀 Начать миссию
+        </button>
+        <button 
+          onClick={() => window.stopSatelliteMusic()}
+          className="bg-red-600 hover:bg-red-700 text-white font-bold py-2 px-4 rounded transition duration-300 transform hover:scale-105"
+        >
+          ⏹️ Прервать
+        </button>
+      </div>
+    </div>
+  );
+};
+
+export default SatelliteTheme;

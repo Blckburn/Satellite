@@ -58,7 +58,7 @@ inline bool IsWalkable(TileType type) {
         return true;
     case TileType::EMPTY:
     case TileType::WALL:
-    case TileType::WATER:
+    case TileType::WATER:  // ПОДТВЕРЖДЕНО: Вода должна быть непроходимой
     case TileType::GLASS:
     case TileType::OBSTACLE:
     case TileType::SPECIAL: // Специальные тайлы могут быть как проходимыми, так и нет
@@ -103,22 +103,32 @@ inline bool IsTransparent(TileType type) {
 inline float GetDefaultHeight(TileType type) {
     switch (type) {
     case TileType::WALL:
+        return 1.0f;  // Полная высота для стен
     case TileType::OBSTACLE:
-        return 1.0f;
+        return 1.0f;  // Полная высота для препятствий
     case TileType::DOOR:
-        return 1.0f;
+        return 1.0f;  // Полная высота для дверей
     case TileType::WATER:
-        return 0.2f;
+        return 0.1f;  // Пониженная высота для воды (была 0.2f)
+    case TileType::GLASS:
+        return 0.8f;  // Высота для стеклянных перегородок
+    case TileType::SPECIAL:
+        return 0.3f;  // Средняя высота для специальных тайлов
+
+        // Все плоские тайлы имеют высоту ровно 0.0f
     case TileType::GRASS:
     case TileType::STONE:
     case TileType::METAL:
     case TileType::WOOD:
-    case TileType::GLASS:
     case TileType::FLOOR:
-    case TileType::SPECIAL:
-        return 0.0f;
+        return 0.0f;  // Плоские тайлы
+
     case TileType::EMPTY:
     default:
-        return 0.0f;
+        return 0.0f;  // Пустые тайлы тоже плоские
     }
+}
+
+inline bool IsWater(TileType type) {
+    return type == TileType::WATER;
 }

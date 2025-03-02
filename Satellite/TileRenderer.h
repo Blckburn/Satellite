@@ -35,7 +35,7 @@ public:
      * @param color Цвет для отрисовки, если текстура отсутствует
      * @param priority Приоритет отрисовки (выше значение = отображается поверх)
      */
-    void addFlatTile(float x, float y, SDL_Texture* texture, SDL_Color color, int priority = 0);
+    void addFlatTile(float x, float y, SDL_Texture* texture, SDL_Color color, float priority = 0.0f);
 
     /**
      * @brief Добавление объемного тайла
@@ -57,7 +57,7 @@ public:
         SDL_Color topColor,
         SDL_Color leftColor,
         SDL_Color rightColor,
-        int priority = 0);
+        float priority = 0.0f);
 
     /**
      * @brief Отрисовка всех тайлов

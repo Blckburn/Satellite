@@ -63,6 +63,69 @@ public:
      */
     TileMap* getMap() { return m_tileMap.get(); }
 
+    /**
+     * @brief Расчет приоритета визуального порядка для изометрической проекции
+     * @param x Координата X объекта в мировом пространстве
+     * @param y Координата Y объекта в мировом пространстве
+     * @param z Высота объекта
+     * @return Значение приоритета для сортировки
+     */
+    float calculateZOrderPriority(float x, float y, float z);
+
+    /**
+     * @brief Обработка клавиш для перемещения персонажа
+     */
+    void detectKeyInput();
+
+    /**
+     * @brief Отрисовка отладочной информации
+     * @param renderer Указатель на SDL_Renderer
+     * @param centerX X координата центра экрана
+     * @param centerY Y координата центра экрана
+     */
+    void renderDebug(SDL_Renderer* renderer, int centerX, int centerY);
+
+    /**
+     * @brief Отрисовка сцены с использованием блочной Z-сортировки
+     * @param renderer SDL рендерер
+     * @param centerX X координата центра экрана
+     * @param centerY Y координата центра экрана
+     */
+    void renderWithBlockSorting(SDL_Renderer* renderer, int centerX, int centerY);
+
+    /**
+     * @brief Добавление тайла в рендерер с указанным приоритетом
+     * @param x Координата X тайла на карте
+     * @param y Координата Y тайла на карте
+     * @param priority Приоритет отрисовки
+     */
+    void addTileToRenderer(int x, int y, float priority);
+
+    /**
+     * @brief Отрисовка индикатора персонажа, когда он скрыт стенами
+     * @param renderer SDL рендерер
+     * @param centerX X координата центра экрана
+     * @param centerY Y координата центра экрана
+     */
+    void renderPlayerIndicator(SDL_Renderer* renderer, int centerX, int centerY);
+
+    /**
+     * @brief Добавление объемного тайла в рендерер с указанным приоритетом
+     * @param x Координата X тайла на карте
+     * @param y Координата Y тайла на карте
+     * @param priority Приоритет отрисовки
+     */
+    void addVolumetricTileToRenderer(int x, int y, float priority);
+
+    /**
+     * @brief Отрисовка персонажа с гарантией, что он будет виден над полом
+     * @param renderer SDL рендерер
+     * @param centerX X координата центра экрана
+     * @param centerY Y координата центра экрана
+     * @param priority Приоритет отрисовки
+     */
+    void renderPlayer(SDL_Renderer* renderer, int centerX, int centerY, float priority);
+
 private:
     /**
      * @brief Проверяет возможность диагонального перемещения
@@ -82,4 +145,13 @@ private:
 
     float m_playerX;                            ///< X координата игрока
     float m_playerY;                            ///< Y координата игрока
+
+    float m_playerSubX;         ///< Позиция внутри тайла по X (0.0-1.0)
+    float m_playerSubY;         ///< Позиция внутри тайла по Y (0.0-1.0)
+    float m_moveSpeed;          ///< Скорость движения персонажа
+    float m_dX;                 ///< Направление движения по X (с плавающей точкой)
+    float m_dY;                 ///< Направление движения по Y (с плавающей точкой)
+
+    bool m_showDebug;           ///< Флаг отображения отладочной информации
+    float m_collisionSize;      ///< Размер коллизии персонажа для отображения
 };

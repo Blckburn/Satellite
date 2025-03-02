@@ -100,6 +100,12 @@ public:
      */
     std::string toString() const;
 
+    /**
+     * @brief Проверка, является ли тайл водой
+     * @return true, если тайл является водой, false в противном случае
+     */
+    bool isWater() const { return m_type == TileType::WATER; }
+
 private:
     TileType m_type;       ///< Тип тайла
     bool m_walkable;       ///< Признак проходимости
