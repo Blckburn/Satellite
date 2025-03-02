@@ -7,6 +7,7 @@
 #include <random>
 #include <vector>
 #include <string>
+#include <functional>
 
 /**
  * @brief Класс для генерации планетарных миров
@@ -65,6 +66,14 @@ public:
     bool generatePlanet(TileMap* tileMap, const PlanetData& planetData);
 
     /**
+     * @brief Генерация планеты с использованием кэша
+     * @param tileMap Указатель на карту для заполнения
+     * @param planetData Данные о планете
+     * @return true в случае успеха, false при ошибке
+     */
+    bool generatePlanetWithCache(TileMap* tileMap, const PlanetData& planetData);
+
+    /**
      * @brief Генерация региона планеты
      * @param tileMap Указатель на карту для заполнения
      * @param regionData Данные о регионе
@@ -102,6 +111,26 @@ public:
      * @return Сгенерированное описание
      */
     std::string generatePlanetDescription(const PlanetData& planetData);
+
+    /**
+     * @brief Создание рельефа эрозии
+     * @param tileMap Указатель на карту
+     * @param intensity Интенсивность эрозии (0.0-1.0)
+     */
+    void createErosionPatterns(TileMap* tileMap, float intensity);
+
+    /**
+     * @brief Улучшение переходов между биомами
+     * @param tileMap Указатель на карту
+     */
+    void enhanceBiomeTransitions(TileMap* tileMap);
+
+    /**
+     * @brief Создание достопримечательностей на карте
+     * @param tileMap Указатель на карту
+     * @param count Количество достопримечательностей
+     */
+    void createLandmarks(TileMap* tileMap, int count);
 
     /**
      * @brief Установка сида генератора
@@ -181,9 +210,93 @@ private:
      */
     void applyRegionalFeatures(TileMap* tileMap, const RegionData& regionData, const PlanetData& planetData);
 
+    /**
+     * @brief Создание горной вершины
+     * @param tileMap Указатель на карту
+     * @param centerX Центр X
+     * @param centerY Центр Y
+     * @param size Размер вершины
+     */
+    void createMountainPeak(TileMap* tileMap, int centerX, int centerY, int size);
+
+    /**
+     * @brief Создание кратера
+     * @param tileMap Указатель на карту
+     * @param centerX Центр X
+     * @param centerY Центр Y
+     * @param size Размер кратера
+     */
+    void createCraterFormation(TileMap* tileMap, int centerX, int centerY, int size);
+
+    /**
+     * @brief Создание каменного шпиля
+     * @param tileMap Указатель на карту
+     * @param centerX Центр X
+     * @param centerY Центр Y
+     * @param size Размер структуры
+     */
+    void createRockSpire(TileMap* tileMap, int centerX, int centerY, int size);
+
+    /**
+     * @brief Создание древних руин
+     * @param tileMap Указатель на карту
+     * @param centerX Центр X
+     * @param centerY Центр Y
+     * @param size Размер руин
+     */
+    void createAncientRuins(TileMap* tileMap, int centerX, int centerY, int size);
+
+    /**
+     * @brief Создание странного монумента
+     * @param tileMap Указатель на карту
+     * @param centerX Центр X
+     * @param centerY Центр Y
+     * @param size Размер монумента
+     */
+    void createStrangeMonument(TileMap* tileMap, int centerX, int centerY, int size);
+
+    /**
+     * @brief Создание оазиса
+     * @param tileMap Указатель на карту
+     * @param centerX Центр X
+     * @param centerY Центр Y
+     * @param size Размер оазиса
+     */
+    void createOasis(TileMap* tileMap, int centerX, int centerY, int size);
+
+    /**
+     * @brief Создание поля гейзеров
+     * @param tileMap Указатель на карту
+     * @param centerX Центр X
+     * @param centerY Центр Y
+     * @param size Размер поля гейзеров
+     */
+    void createGeyserField(TileMap* tileMap, int centerX, int centerY, int size);
+
+    /**
+     * @brief Создание кристаллической формации
+     * @param tileMap Указатель на карту
+     * @param centerX Центр X
+     * @param centerY Центр Y
+     * @param size Размер формации
+     */
+    void createCrystalFormation(TileMap* tileMap, int centerX, int centerY, int size);
+
+    /**
+     * @brief Создание инопланетной структуры
+     * @param tileMap Указатель на карту
+     * @param centerX Центр X
+     * @param centerY Центр Y
+     * @param size Размер структуры
+     */
+    void createAlienStructure(TileMap* tileMap, int centerX, int centerY, int size);
+
 private:
     unsigned int m_seed;                               ///< Сид генератора
     std::mt19937 m_rng;                               ///< Генератор случайных чисел
     std::vector<std::shared_ptr<Biome>> m_biomes;     ///< Список доступных биомов
     std::shared_ptr<MapGenerator> m_mapGenerator;     ///< Генератор карт
+
+    PlanetData m_lastPlanetData;                      ///< Данные последней сгенерированной планеты
+    std::shared_ptr<TileMap> m_cachedTileMap;         ///< Кэш последней сгенерированной карты
 };

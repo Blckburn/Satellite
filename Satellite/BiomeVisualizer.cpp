@@ -2,6 +2,7 @@
 #include <sstream>
 #include <iomanip>
 #include <algorithm>
+#include <iostream>
 
 BiomeVisualizer::BiomeVisualizer(const std::vector<std::shared_ptr<Biome>>& biomes, IsometricRenderer* isoRenderer)
     : m_biomes(biomes), m_isoRenderer(isoRenderer), m_activeBiomeId(-1),

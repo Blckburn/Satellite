@@ -130,4 +130,6 @@ private:
 
     DisplayMode m_displayMode;                ///< Текущий режим отображения
     WorldGenerator::PlanetData m_planetData;  ///< Данные о текущей планете
+
+    bool m_showDebugInfo;                     ///< Флаг отображения отладочной информации
 };
