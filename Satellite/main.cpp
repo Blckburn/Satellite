@@ -1,5 +1,6 @@
 ﻿#include "Engine.h"
 #include "MapScene.h"
+#include "PlanetScene.h"
 #include <iostream>
 #include <memory>
 
@@ -9,44 +10,127 @@ int main(int argc, char* argv[]) {
     SDL_SetMainReady();
 #endif
 
-    // 1. Создание и инициализация движка
-    Engine engine("Satellite Engine - Tile System Demo", 800, 600);
+    // 1. Парсинг аргументов командной строки
+    bool usePlanetScene = false;
+    int sceneType = 0;
+
+    for (int i = 1; i < argc; i++) {
+        std::string arg = argv[i];
+        if (arg == "--planet" || arg == "-p") {
+            usePlanetScene = true;
+        }
+        else if (arg == "--scene" || arg == "-s") {
+            if (i + 1 < argc) {
+                sceneType = std::stoi(argv[i + 1]);
+                i++; // Пропускаем следующий аргумент, так как мы уже его обработали
+            }
+        }
+    }
+
+    // 2. Создание и инициализация движка
+    Engine engine("Satellite Engine - Planet Generation Demo", 800, 600);
 
     if (!engine.initialize()) {
         std::cerr << "Failed to initialize engine. Exiting..." << std::endl;
         return 1;
     }
 
-    // 2. Создание и инициализация MapScene с передачей указателя на движок
-    auto mapScene = std::make_shared<MapScene>("MapScene", &engine);
-    if (!mapScene->initialize()) {
-        std::cerr << "Failed to initialize map scene. Exiting..." << std::endl;
-        return 1;
+    // 3. Создание и инициализация сцены в зависимости от аргументов
+    std::shared_ptr<Scene> activeScene;
+
+    if (usePlanetScene) {
+        // Создаем сцену генерации планет
+        auto planetScene = std::make_shared<PlanetScene>("PlanetScene", &engine);
+        if (!planetScene->initialize()) {
+            std::cerr << "Failed to initialize planet scene. Exiting..." << std::endl;
+            return 1;
+        }
+
+        // Если указан тип сцены (тип планеты), генерируем соответствующую планету
+        if (sceneType >= 1 && sceneType <= 6) {
+            MapGenerator::GenerationType terrainType;
+            float temperature = 20.0f;
+            float waterCoverage = 0.5f;
+
+            switch (sceneType) {
+            case 1: // DEFAULT
+                terrainType = MapGenerator::GenerationType::DEFAULT;
+                break;
+            case 2: // ARCHIPELAGO
+                terrainType = MapGenerator::GenerationType::ARCHIPELAGO;
+                temperature = 25.0f;
+                waterCoverage = 0.7f;
+                break;
+            case 3: // MOUNTAINOUS
+                terrainType = MapGenerator::GenerationType::MOUNTAINOUS;
+                temperature = 10.0f;
+                waterCoverage = 0.3f;
+                break;
+            case 4: // CRATER
+                terrainType = MapGenerator::GenerationType::CRATER;
+                temperature = 5.0f;
+                waterCoverage = 0.2f;
+                break;
+            case 5: // VOLCANIC
+                terrainType = MapGenerator::GenerationType::VOLCANIC;
+                temperature = 60.0f;
+                waterCoverage = 0.3f;
+                break;
+            case 6: // ALIEN
+                terrainType = MapGenerator::GenerationType::ALIEN;
+                temperature = 30.0f;
+                waterCoverage = 0.4f;
+                break;
+            default:
+                terrainType = MapGenerator::GenerationType::DEFAULT;
+            }
+
+            planetScene->generateCustomPlanet(temperature, waterCoverage, terrainType);
+        }
+
+        activeScene = planetScene;
+    }
+    else {
+        // Создаем стандартную MapScene для обратной совместимости
+        auto mapScene = std::make_shared<MapScene>("MapScene", &engine);
+        if (!mapScene->initialize()) {
+            std::cerr << "Failed to initialize map scene. Exiting..." << std::endl;
+            return 1;
+        }
+        activeScene = mapScene;
     }
 
-    // 3. Установка активной сцены
-    engine.setActiveScene(mapScene);
+    // 4. Установка активной сцены
+    engine.setActiveScene(activeScene);
 
-    // 4. Вывод инструкций
-    std::cout << "\n*** Satellite Engine - Tile System Demo ***\n";
-    std::cout << "Controls:\n";
-    std::cout << "Movement:\n";
-    std::cout << "  W or Up Arrow    - Move north\n";
-    std::cout << "  S or Down Arrow  - Move south\n";
-    std::cout << "  D or Right Arrow - Move east\n";
-    std::cout << "  A or Left Arrow  - Move west\n";
-    std::cout << "  W+D              - Move northeast\n";
-    std::cout << "  W+A              - Move northwest\n";
-    std::cout << "  S+D              - Move southeast\n";
-    std::cout << "  S+A              - Move southwest\n";
-    std::cout << "\nOther controls:\n";
-    std::cout << "  G - Generate new test map\n";
-    std::cout << "  Mouse wheel - Zoom in/out\n";
-    std::cout << "  Middle mouse button - Drag camera\n";
-    std::cout << "  R - Reset player position\n";
-    std::cout << "  ESC - Exit\n\n";
+    // 5. Вывод инструкций в зависимости от типа сцены
+    std::cout << "\n*** Satellite Engine - ";
+    if (usePlanetScene) {
+        std::cout << "Planet Generation Demo ***\n";
+        std::cout << "Controls:\n";
+        std::cout << "  WASD or Arrow keys - Move\n";
+        std::cout << "  G - Generate random planet\n";
+        std::cout << "  1-6 - Generate specific planet types:\n";
+        std::cout << "       1: Default, 2: Archipelago, 3: Mountainous,\n";
+        std::cout << "       4: Crater, 5: Volcanic, 6: Alien\n";
+        std::cout << "  TAB - Toggle display mode (normal, temperature, humidity, etc.)\n";
+        std::cout << "  Mouse wheel - Zoom in/out\n";
+        std::cout << "  Middle mouse button - Drag camera\n";
+        std::cout << "  R - Reset player position\n";
+        std::cout << "  ESC - Exit\n\n";
+    }
+    else {
+        std::cout << "Tile System Demo ***\n";
+        std::cout << "Controls:\n";
+        std::cout << "  WASD or Arrow keys - Move\n";
+        std::cout << "  G - Generate new test map\n";
+        std::cout << "  Mouse wheel - Zoom in/out\n";
+        std::cout << "  Middle mouse button - Drag camera\n";
+        std::cout << "  R - Reset player position\n";
+        std::cout << "  ESC - Exit\n\n";
+    }
 
-    // 5. Запуск движка
+    // 6. Запуск движка
     engine.run();
 
     std::cout << "Application finished successfully." << std::endl;

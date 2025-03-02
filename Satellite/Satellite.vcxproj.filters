@@ -75,6 +75,12 @@
     <ClInclude Include="PlanetScene.h">
       <Filter>include</Filter>
     </ClInclude>
+    <ClInclude Include="BiomeVisualizer.h">
+      <Filter>include</Filter>
+    </ClInclude>
+    <ClInclude Include="ChunkedMapGenerator.h">
+      <Filter>include</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="Engine.cpp">
@@ -123,6 +129,12 @@
       <Filter>src</Filter>
     </ClCompile>
     <ClCompile Include="PlanetScene.cpp">
+      <Filter>src</Filter>
+    </ClCompile>
+    <ClCompile Include="BiomeVisualizer.cpp">
+      <Filter>src</Filter>
+    </ClCompile>
+    <ClCompile Include="ChunkedMapGenerator.cpp">
       <Filter>src</Filter>
     </ClCompile>
   </ItemGroup>

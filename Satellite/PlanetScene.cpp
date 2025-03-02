@@ -836,7 +836,30 @@ std::string PlanetScene::getTileInfo(int x, int y) const {
     info << "Elevation: " << std::fixed << std::setprecision(2) << tile->getElevation() << ", ";
     info << "Height: " << std::fixed << std::setprecision(2) << tile->getHeight() << "\n";
     info << "Resources: " << std::fixed << std::setprecision(2) << tile->getResourceDensity() << ", ";
-    info << "Radiation: " << std::fixed << std::setprecision(2) << tile->getRadiationLevel();
+    info << "Radiation: " << std::fixed << std::setprecision(2) << tile->getRadiationLevel() << "\n";
+
+    // Добавляем информацию о проходимости и прозрачности
+    info << "Walkable: " << (tile->isWalkable() ? "Yes" : "No") << ", ";
+    info << "Transparent: " << (tile->isTransparent() ? "Yes" : "No") << "\n";
+
+    // Информация о биоме
+    info << "Biome ID: " << tile->getBiomeId();
+
+    // Если есть декорации, отображаем их
+    const auto& decorations = tile->getDecorations();
+    if (!decorations.empty()) {
+        info << "\nDecorations:";
+        for (const auto& decor : decorations) {
+            info << "\n  - " << decor.name << " (ID: " << decor.id << ", Scale: "
+                << std::fixed << std::setprecision(2) << decor.scale
+                << (decor.animated ? ", Animated" : "") << ")";
+        }
+    }
+
+    // Информация об опасности
+    if (tile->isHazardous()) {
+        info << "\nHAZARD WARNING: This tile is dangerous!";
+    }
 
     return info.str();
 }
