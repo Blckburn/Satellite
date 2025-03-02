@@ -2,7 +2,13 @@
 
 #include "Entity.h"
 #include "TileMap.h"
+#include "CollisionSystem.h"
 #include <memory>
+#include <unordered_map>
+#include <string>
+
+// Предварительные объявления
+class PlayerState;
 
 /**
  * @brief Класс игрока, управляемый пользователем
@@ -13,8 +19,10 @@ public:
      * @brief Конструктор
      * @param name Имя игрока
      * @param tileMap Указатель на карту тайлов
+     * @param collisionSystem Указатель на систему коллизий
      */
-    Player(const std::string& name, std::shared_ptr<TileMap> tileMap);
+    Player(const std::string& name, std::shared_ptr<TileMap> tileMap,
+        std::shared_ptr<CollisionSystem> collisionSystem);
 
     /**
      * @brief Деструктор
@@ -79,14 +87,15 @@ public:
     float getPlayerSubY() const { return m_subY; }
 
     /**
-     * @brief Проверка возможности диагонального перемещения
-     * @param fromX Начальная X координата
-     * @param fromY Начальная Y координата
-     * @param toX Конечная X координата
-     * @param toY Конечная Y координата
-     * @return true, если диагональное перемещение возможно, false в противном случае
-     */
+* @brief Проверка возможности диагонального перемещения
+* @param fromX Начальная X координата
+* @param fromY Начальная Y координата
+* @param toX Конечная X координата
+* @param toY Конечная Y координата
+* @return true, если диагональное перемещение возможно, false в противном случае
+*/
     bool canMoveDiagonally(int fromX, int fromY, int toX, int toY);
+
 
     /**
      * @brief Получение размера коллизии
@@ -125,19 +134,70 @@ public:
     float getMoveDirectionY() const { return m_dY; }
 
     /**
+     * @brief Установка направления движения
+     * @param dx Направление по X
+     * @param dy Направление по Y
+     */
+    void setMoveDirection(float dx, float dy);
+
+    /**
      * @brief Расчет приоритета визуального порядка для изометрической проекции
      * @return Значение приоритета для сортировки
      */
     float calculateZOrderPriority();
 
+    /**
+     * @brief Получение текущего состояния игрока
+     * @return Указатель на текущее состояние
+     */
+    PlayerState* getCurrentState() const { return m_currentState; }
+
+    /**
+     * @brief Получение имени текущего состояния
+     * @return Строка с именем текущего состояния
+     */
+    std::string getCurrentStateName() const;
+
+    /**
+     * @brief Смена текущего состояния
+     * @param stateName Имя нового состояния
+     * @return true, если состояние успешно изменено, false в противном случае
+     */
+    bool changeState(const std::string& stateName);
+
+    /**
+     * @brief Обработка события текущим состоянием
+     * @param event Событие SDL
+     */
+    void handleCurrentStateEvent(const SDL_Event& event);
+
+    /**
+     * @brief Получение указателя на карту тайлов
+     * @return Указатель на TileMap
+     */
+    std::shared_ptr<TileMap> getTileMap() const { return m_tileMap; }
+
+    /**
+     * @brief Получение формы коллизии игрока
+     * @return Форма коллизии
+     */
+    CollisionShape getCollisionShape() const;
+
 private:
     /**
-     * @brief Обнаружение нажатий клавиш для движения
+     * @brief Перемещение игрока с учетом коллизий
+     * @param deltaTime Время, прошедшее с предыдущего кадра
      */
-    void detectKeyInput();
+    void moveWithCollision(float deltaTime);
+
+    /**
+     * @brief Инициализация состояний игрока
+     */
+    void initializeStates();
 
 private:
     std::shared_ptr<TileMap> m_tileMap;  ///< Указатель на карту тайлов
+    std::shared_ptr<CollisionSystem> m_collisionSystem; ///< Указатель на систему коллизий
     float m_subX;         ///< Позиция внутри тайла по X (0.0-1.0)
     float m_subY;         ///< Позиция внутри тайла по Y (0.0-1.0)
     float m_moveSpeed;    ///< Скорость движения персонажа
@@ -147,4 +207,8 @@ private:
 
     // Визуальные параметры
     SDL_Color m_color;    ///< Цвет игрока
+
+    // Система состояний
+    PlayerState* m_currentState; ///< Текущее состояние игрока
+    std::unordered_map<std::string, std::unique_ptr<PlayerState>> m_states; ///< Словарь всех состояний
 };

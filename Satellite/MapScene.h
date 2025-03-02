@@ -5,6 +5,7 @@
 #include "TileRenderer.h"
 #include "IsometricRenderer.h"
 #include "Camera.h"
+#include "CollisionSystem.h"
 #include <SDL.h>
 #include <memory>
 #include "Player.h"
@@ -115,10 +116,18 @@ public:
     void renderPlayer(SDL_Renderer* renderer, int centerX, int centerY, float priority);
 
     /**
- * @brief Получение текущего биома
- * @return Номер текущего биома
- */
+     * @brief Получение текущего биома
+     * @return Номер текущего биома
+     */
     int getCurrentBiome() const { return m_currentBiome; }
+
+    /**
+     * @brief Отрисовка отладочной информации о коллизиях
+     * @param renderer Указатель на SDL_Renderer
+     * @param centerX X координата центра экрана
+     * @param centerY Y координата центра экрана
+     */
+    void renderCollisionDebug(SDL_Renderer* renderer, int centerX, int centerY);
 
 private:
 
@@ -130,5 +139,6 @@ private:
     std::shared_ptr<IsometricRenderer> m_isoRenderer; ///< Изометрический рендерер
     std::shared_ptr<TileRenderer> m_tileRenderer;     ///< Рендерер тайлов
     std::shared_ptr<Camera> m_camera;           ///< Камера
-    std::shared_ptr<Player> m_player;     ///< Указатель на игрока
+    std::shared_ptr<Player> m_player;           ///< Указатель на игрока
+    std::shared_ptr<CollisionSystem> m_collisionSystem; ///< Система коллизий
 };

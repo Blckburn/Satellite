@@ -28,8 +28,11 @@ bool MapScene::initialize() {
         return false;
     }
 
-    // 4. Создаем и инициализируем игрока
-    m_player = std::make_shared<Player>("Player1", m_tileMap);
+    // 4. Инициализация системы коллизий
+    m_collisionSystem = std::make_shared<CollisionSystem>(m_tileMap);
+
+    // 5. Создаем и инициализируем игрока
+    m_player = std::make_shared<Player>("Player1", m_tileMap, m_collisionSystem);
     m_player->setPosition(25.0f, 25.0f, 0.5f); // Z=0.5f для высоты
     m_player->setPlayerPosition(25.0f, 25.0f, 0.5f, 0.5f);
 
@@ -44,13 +47,13 @@ bool MapScene::initialize() {
     // Добавляем игрока в список сущностей сцены
     addEntity(m_player);
 
-    // 5. Генерация тестовой карты
+    // 6. Генерация тестовой карты
     generateTestMap();
 
-    // 6. Инициализация рендерера тайлов
+    // 7. Инициализация рендерера тайлов
     m_tileRenderer = std::make_shared<TileRenderer>(m_isoRenderer.get());
 
-    std::cout << "MapScene initialized successfully" << std::endl;
+    LOG_INFO("MapScene initialized successfully");
     return true;
 }
 
@@ -411,6 +414,54 @@ void MapScene::renderDebug(SDL_Renderer* renderer, int centerX, int centerY) {
             SDL_RenderDrawLines(renderer, neighborPoints, 5);
         }
     }
+
+    // 4. Отображение информации о текущем состоянии игрока
+    // Положение текста с информацией о состоянии
+    int textX = 20;
+    int textY = 20;
+
+    // Получаем имя текущего состояния
+    std::string stateName = m_player->getCurrentStateName();
+
+    // Создаем строку с направлением движения
+    std::string directionStr = "Dir: (" +
+        std::to_string(m_player->getMoveDirectionX()) + ", " +
+        std::to_string(m_player->getMoveDirectionY()) + ")";
+
+    // Создаем цвет для текста в зависимости от состояния
+    SDL_Color textColor;
+    if (stateName == "Idle") {
+        textColor = { 0, 255, 0, 255 }; // Зеленый для покоя
+    }
+    else if (stateName == "Moving") {
+        textColor = { 255, 165, 0, 255 }; // Оранжевый для движения
+    }
+    else if (stateName == "Action") {
+        textColor = { 255, 0, 0, 255 }; // Красный для действия
+    }
+    else {
+        textColor = { 255, 255, 255, 255 }; // Белый для других состояний
+    }
+
+    // Рисуем фон для текста
+    SDL_Rect textBg = { textX - 5, textY - 5, 210, 60 };
+    SDL_SetRenderDrawColor(renderer, 0, 0, 0, 180);
+    SDL_RenderFillRect(renderer, &textBg);
+    SDL_SetRenderDrawColor(renderer, textColor.r, textColor.g, textColor.b, 255);
+    SDL_RenderDrawRect(renderer, &textBg);
+
+    // В реальном проекте здесь будет использоваться SDL_ttf для отрисовки текста
+    // Но пока обойдемся без этого, поскольку мы не настроили работу с шрифтами
+
+    // Отрисовка положения игрока (в реальности используйте SDL_ttf)
+    std::string posStr = "Pos: (" +
+        std::to_string(static_cast<int>(playerFullX)) + "." +
+        std::to_string(static_cast<int>(m_player->getPlayerSubX() * 100)) + ", " +
+        std::to_string(static_cast<int>(playerFullY)) + "." +
+        std::to_string(static_cast<int>(m_player->getPlayerSubY() * 100)) + ")";
+
+    // В реальном проекте здесь будет код для отрисовки текста с состоянием и позицией
+    renderCollisionDebug(renderer, centerX, centerY);
 }
 
 void MapScene::renderWithBlockSorting(SDL_Renderer* renderer, int centerX, int centerY) {
@@ -663,4 +714,137 @@ void MapScene::renderPlayer(SDL_Renderer* renderer, int centerX, int centerY, fl
         playerColor, playerLeftColor, playerRightColor,
         priority
     );
+}
+
+void MapScene::renderCollisionDebug(SDL_Renderer* renderer, int centerX, int centerY) {
+    if (!m_player) return;
+
+    // Получаем форму коллизии игрока
+    CollisionShape playerShape = m_player->getCollisionShape();
+
+    // Получаем координаты игрока
+    float playerX = m_player->getPlayerX() + m_player->getPlayerSubX();
+    float playerY = m_player->getPlayerY() + m_player->getPlayerSubY();
+
+    // Рисуем форму коллизии в зависимости от типа
+    if (playerShape.getType() == CollisionShape::Type::CIRCLE) {
+        // Для круговой формы рисуем окружность
+        float radius = playerShape.getRadius();
+
+        // Преобразуем координаты центра в экранные
+        int screenCenterX, screenCenterY;
+        m_isoRenderer->worldToDisplay(
+            playerX, playerY, 0.0f,
+            centerX, centerY, screenCenterX, screenCenterY
+        );
+
+        // Рисуем точки вокруг, формирующие окружность
+        SDL_SetRenderDrawColor(renderer, 255, 0, 0, 255); // Красный цвет
+
+        // Количество точек для отрисовки окружности
+        const int numPoints = 32;
+        SDL_Point points[numPoints + 1];
+
+        for (int i = 0; i < numPoints; i++) {
+            float angle = i * 2.0f * M_PI / numPoints;
+            float worldX = playerX + radius * cos(angle);
+            float worldY = playerY + radius * sin(angle);
+
+            int screenX, screenY;
+            m_isoRenderer->worldToDisplay(
+                worldX, worldY, 0.0f,
+                centerX, centerY, screenX, screenY
+            );
+
+            points[i] = { screenX, screenY };
+        }
+
+        // Замыкаем контур
+        points[numPoints] = points[0];
+
+        // Рисуем окружность
+        SDL_RenderDrawLines(renderer, points, numPoints + 1);
+    }
+    else if (playerShape.getType() == CollisionShape::Type::RECTANGLE) {
+        // Для прямоугольной формы рисуем прямоугольник
+        float halfWidth = playerShape.getWidth() / 2.0f;
+        float halfHeight = playerShape.getHeight() / 2.0f;
+
+        // Координаты углов прямоугольника
+        float corners[4][2] = {
+            {playerX - halfWidth, playerY - halfHeight}, // Верхний левый
+            {playerX + halfWidth, playerY - halfHeight}, // Верхний правый
+            {playerX + halfWidth, playerY + halfHeight}, // Нижний правый
+            {playerX - halfWidth, playerY + halfHeight}  // Нижний левый
+        };
+
+        // Преобразуем координаты углов в экранные
+        SDL_Point points[5];
+        for (int i = 0; i < 4; i++) {
+            int screenX, screenY;
+            m_isoRenderer->worldToDisplay(
+                corners[i][0], corners[i][1], 0.0f,
+                centerX, centerY, screenX, screenY
+            );
+
+            points[i] = { screenX, screenY };
+        }
+
+        // Замыкаем контур
+        points[4] = points[0];
+
+        // Рисуем прямоугольник
+        SDL_SetRenderDrawColor(renderer, 255, 0, 0, 255); // Красный цвет
+        SDL_RenderDrawLines(renderer, points, 5);
+    }
+
+    // Отображение проходимых и непроходимых тайлов
+    // Диапазон тайлов для проверки
+    int tileRadius = 5;
+    int playerTileX = static_cast<int>(playerX);
+    int playerTileY = static_cast<int>(playerY);
+
+    for (int y = playerTileY - tileRadius; y <= playerTileY + tileRadius; y++) {
+        for (int x = playerTileX - tileRadius; x <= playerTileX + tileRadius; x++) {
+            if (!m_tileMap->isValidCoordinate(x, y)) continue;
+
+            bool isWalkable = m_tileMap->isTileWalkable(x, y);
+
+            // Получаем экранные координаты углов тайла
+            int screenX[4], screenY[4];
+
+            // Верхний левый угол
+            m_isoRenderer->worldToDisplay(x, y, 0.0f, centerX, centerY, screenX[0], screenY[0]);
+
+            // Верхний правый угол
+            m_isoRenderer->worldToDisplay(x + 1.0f, y, 0.0f, centerX, centerY, screenX[1], screenY[1]);
+
+            // Нижний правый угол
+            m_isoRenderer->worldToDisplay(x + 1.0f, y + 1.0f, 0.0f, centerX, centerY, screenX[2], screenY[2]);
+
+            // Нижний левый угол
+            m_isoRenderer->worldToDisplay(x, y + 1.0f, 0.0f, centerX, centerY, screenX[3], screenY[3]);
+
+            // Создаем массив точек для тайла
+            SDL_Point tilePoints[5] = {
+                {screenX[0], screenY[0]},
+                {screenX[1], screenY[1]},
+                {screenX[2], screenY[2]},
+                {screenX[3], screenY[3]},
+                {screenX[0], screenY[0]} // Замыкаем контур
+            };
+
+            // Рисуем границы тайла с цветом, зависящим от проходимости
+            if (isWalkable) {
+                // Зеленый для проходимых тайлов
+                SDL_SetRenderDrawColor(renderer, 0, 200, 0, 100);
+            }
+            else {
+                // Красный для непроходимых тайлов
+                SDL_SetRenderDrawColor(renderer, 200, 0, 0, 100);
+            }
+
+            SDL_RenderDrawLines(renderer, tilePoints, 5);
+        }
+    }
 }

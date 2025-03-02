@@ -1,147 +1,60 @@
 ﻿#include "Player.h"
+#include "PlayerState.h"
 #include <cmath>
 #include <iostream>
+#include "Logger.h"
 
-Player::Player(const std::string& name, std::shared_ptr<TileMap> tileMap)
-    : Entity(name), m_tileMap(tileMap), m_subX(0.5f), m_subY(0.5f),
-    m_moveSpeed(0.05f), m_dX(0.0f), m_dY(0.0f), m_collisionSize(0.35f) {
+Player::Player(const std::string& name, std::shared_ptr<TileMap> tileMap,
+    std::shared_ptr<CollisionSystem> collisionSystem)
+    : Entity(name), m_tileMap(tileMap), m_collisionSystem(collisionSystem),
+    m_subX(0.5f), m_subY(0.5f), m_moveSpeed(0.05f), m_dX(0.0f), m_dY(0.0f),
+    m_collisionSize(0.35f), m_currentState(nullptr) {
 
     // Устанавливаем цвет игрока
     m_color = { 255, 50, 50, 255 }; // Ярко-красный
 }
 
 Player::~Player() {
+    // Состояния очистятся автоматически благодаря unique_ptr
+    LOG_DEBUG("Player destroyed: " + m_name);
 }
 
 bool Player::initialize() {
-    // Базовая инициализация, в будущем здесь может быть загрузка спрайтов и т.д.
-    std::cout << "Player initialized: " << m_name << std::endl;
+    // Инициализация состояний
+    initializeStates();
+
+    // Установка начального состояния
+    if (m_states.find("Idle") != m_states.end()) {
+        m_currentState = m_states["Idle"].get();
+        m_currentState->enter();
+    }
+
+    LOG_INFO("Player initialized: " + m_name);
     return true;
 }
 
 void Player::handleEvent(const SDL_Event& event) {
-    // Обработка событий, связанных с игроком
-    // Основное управление осуществляется через keyboard state в методе detectKeyInput
+    // Передаем событие текущему состоянию
+    if (m_currentState) {
+        m_currentState->handleEvent(event);
+    }
 }
 
 void Player::update(float deltaTime) {
-    // 1. Обнаружение нажатий клавиш
-    detectKeyInput();
-
-    // 2. Получаем текущую позицию персонажа
-    int currentTileX = static_cast<int>(m_position.x);
-    int currentTileY = static_cast<int>(m_position.y);
-
-    // 3. Обработка перемещения при наличии направления
-    if (m_dX != 0.0f || m_dY != 0.0f) {
-        // Нормализация скорости для разных частот кадров
-        float normalizedSpeed = m_moveSpeed * deltaTime * 60.0f;
-
-        // Рассчитываем следующую позицию
-        float nextSubX = m_subX + m_dX * normalizedSpeed;
-        float nextSubY = m_subY + m_dY * normalizedSpeed;
-
-        // Определяем, выходит ли персонаж за пределы текущего тайла
-        bool crossingTileBoundaryX = nextSubX >= 1.0f || nextSubX < 0.0f;
-        bool crossingTileBoundaryY = nextSubY >= 1.0f || nextSubY < 0.0f;
-
-        // Координаты следующего тайла
-        int nextTileX = currentTileX + (nextSubX >= 1.0f ? 1 : (nextSubX < 0.0f ? -1 : 0));
-        int nextTileY = currentTileY + (nextSubY >= 1.0f ? 1 : (nextSubY < 0.0f ? -1 : 0));
-
-        // Проверка возможности движения по X
-        bool canMoveX = true;
-        if (crossingTileBoundaryX) {
-            canMoveX = m_tileMap->isValidCoordinate(nextTileX, currentTileY) &&
-                m_tileMap->isTileWalkable(nextTileX, currentTileY);
-        }
-
-        // Проверка возможности движения по Y
-        bool canMoveY = true;
-        if (crossingTileBoundaryY) {
-            canMoveY = m_tileMap->isValidCoordinate(currentTileX, nextTileY) &&
-                m_tileMap->isTileWalkable(currentTileX, nextTileY);
-        }
-
-        // Проверка диагонального движения
-        bool diagonalMove = crossingTileBoundaryX && crossingTileBoundaryY;
-        bool canMoveDiag = true;
-
-        if (diagonalMove) {
-            canMoveDiag = m_tileMap->isValidCoordinate(nextTileX, nextTileY) &&
-                m_tileMap->isTileWalkable(nextTileX, nextTileY) &&
-                canMoveX && canMoveY;
-        }
-
-        // Применяем движение с учетом коллизий
-        if (canMoveX && (!diagonalMove || canMoveDiag)) {
-            m_subX = nextSubX;
-
-            // Если перешли в новый тайл, обновляем координаты
-            if (nextSubX >= 1.0f) {
-                m_position.x += 1.0f;
-                m_subX -= 1.0f;
-            }
-            else if (nextSubX < 0.0f) {
-                m_position.x -= 1.0f;
-                m_subX += 1.0f;
-            }
-        }
-        else if (crossingTileBoundaryX) {
-            // Останавливаемся у границы тайла
-            m_subX = nextSubX >= 1.0f ? 0.99f : 0.01f;
-        }
-        else {
-            m_subX = nextSubX; // Двигаемся в пределах текущего тайла
-        }
-
-        if (canMoveY && (!diagonalMove || canMoveDiag)) {
-            m_subY = nextSubY;
-
-            // Если перешли в новый тайл, обновляем координаты
-            if (nextSubY >= 1.0f) {
-                m_position.y += 1.0f;
-                m_subY -= 1.0f;
-            }
-            else if (nextSubY < 0.0f) {
-                m_position.y -= 1.0f;
-                m_subY += 1.0f;
-            }
-        }
-        else if (crossingTileBoundaryY) {
-            // Останавливаемся у границы тайла
-            m_subY = nextSubY >= 1.0f ? 0.99f : 0.01f;
-        }
-        else {
-            m_subY = nextSubY; // Двигаемся в пределах текущего тайла
-        }
-
-        // Гарантируем, что субкоординаты остаются в диапазоне [0, 1)
-        if (m_subX >= 1.0f) {
-            m_position.x += 1.0f;
-            m_subX -= 1.0f;
-        }
-        else if (m_subX < 0.0f) {
-            m_position.x -= 1.0f;
-            m_subX += 1.0f;
-        }
-
-        if (m_subY >= 1.0f) {
-            m_position.y += 1.0f;
-            m_subY -= 1.0f;
-        }
-        else if (m_subY < 0.0f) {
-            m_position.y -= 1.0f;
-            m_subY += 1.0f;
-        }
+    // 1. Обновляем текущее состояние
+    if (m_currentState) {
+        m_currentState->update(deltaTime);
     }
 
-    // Обновляем Z-координату для корректного отображения
+    // 2. Перемещаем игрока с учетом коллизий
+    moveWithCollision(deltaTime);
+
+    // 3. Обновляем Z-координату для корректного отображения
     m_position.z = 0.5f; // Высота персонажа
 }
 
 void Player::render(SDL_Renderer* renderer) {
-    // В базовой версии не делаем ничего - отрисовка будет осуществляться в MapScene
+    // В базовой версии не делаем ничего - отрисовка осуществляется в MapScene
     // В дальнейшем здесь будет код для отрисовки спрайта персонажа
 }
 
@@ -210,39 +123,103 @@ float Player::calculateZOrderPriority() {
     return baseDepth + heightFactor + boundaryFactor;
 }
 
-void Player::detectKeyInput() {
-    // Получаем текущее состояние клавиатуры
-    const Uint8* keyState = SDL_GetKeyboardState(NULL);
-
-    // Определяем нажатие клавиш направления
-    bool upPressed = keyState[SDL_SCANCODE_W] || keyState[SDL_SCANCODE_UP];
-    bool downPressed = keyState[SDL_SCANCODE_S] || keyState[SDL_SCANCODE_DOWN];
-    bool leftPressed = keyState[SDL_SCANCODE_A] || keyState[SDL_SCANCODE_LEFT];
-    bool rightPressed = keyState[SDL_SCANCODE_D] || keyState[SDL_SCANCODE_RIGHT];
-
-    // Сбрасываем направление перед установкой нового
-    m_dX = 0.0f;
-    m_dY = 0.0f;
-
-    // Определение направления (изометрическая система координат)
-    if (upPressed && !downPressed) {
-        m_dY = -1.0f; // Север в изометрии
+std::string Player::getCurrentStateName() const {
+    if (m_currentState) {
+        return m_currentState->getName();
     }
-    else if (!upPressed && downPressed) {
-        m_dY = 1.0f;  // Юг в изометрии
+    return "None";
+}
+
+bool Player::changeState(const std::string& stateName) {
+    // Проверяем, существует ли такое состояние
+    auto it = m_states.find(stateName);
+    if (it == m_states.end()) {
+        LOG_ERROR("Player state '" + stateName + "' not found!");
+        return false;
     }
 
-    if (rightPressed && !leftPressed) {
-        m_dX = 1.0f;  // Восток в изометрии
-    }
-    else if (!rightPressed && leftPressed) {
-        m_dX = -1.0f; // Запад в изометрии
+    // Если это то же самое состояние, ничего не делаем
+    if (m_currentState == it->second.get()) {
+        return true;
     }
 
-    // Нормализация для диагонального движения
-    if (m_dX != 0.0f && m_dY != 0.0f) {
-        float length = std::sqrt(m_dX * m_dX + m_dY * m_dY);
-        m_dX /= length;
-        m_dY /= length;
+    // Выходим из текущего состояния
+    if (m_currentState) {
+        m_currentState->exit();
     }
+
+    // Устанавливаем новое состояние
+    m_currentState = it->second.get();
+
+    // Входим в новое состояние
+    m_currentState->enter();
+
+    LOG_DEBUG("Player state changed to: " + stateName);
+    return true;
+}
+
+void Player::handleCurrentStateEvent(const SDL_Event& event) {
+    if (m_currentState) {
+        m_currentState->handleEvent(event);
+    }
+}
+
+void Player::setMoveDirection(float dx, float dy) {
+    m_dX = dx;
+    m_dY = dy;
+}
+
+void Player::moveWithCollision(float deltaTime) {
+    // Если нет направления движения, ничего не делаем
+    if (m_dX == 0.0f && m_dY == 0.0f) {
+        return;
+    }
+
+    // 1. Нормализация скорости для разных частот кадров
+    float normalizedSpeed = m_moveSpeed * deltaTime * 60.0f;
+
+    // 2. Рассчитываем изменение позиции
+    float deltaX = m_dX * normalizedSpeed;
+    float deltaY = m_dY * normalizedSpeed;
+
+    // 3. Получаем форму коллизии игрока
+    CollisionShape playerShape(m_collisionSize);
+
+    // 4. Пытаемся переместить игрока с учетом коллизий
+    CollisionInfo collisionInfo = m_collisionSystem->tryMove(
+        this, playerShape, deltaX, deltaY, true);
+
+    // 5. Обновляем субкоординаты в зависимости от новой позиции
+    // Преобразуем мировые координаты обратно в субкоординаты
+    m_subX = m_position.x - std::floor(m_position.x);
+    m_subY = m_position.y - std::floor(m_position.y);
+
+    // 6. Гарантируем, что субкоординаты остаются в диапазоне [0, 1)
+    if (m_subX >= 1.0f) {
+        m_subX -= 1.0f;
+    }
+    else if (m_subX < 0.0f) {
+        m_subX += 1.0f;
+    }
+
+    if (m_subY >= 1.0f) {
+        m_subY -= 1.0f;
+    }
+    else if (m_subY < 0.0f) {
+        m_subY += 1.0f;
+    }
+}
+
+void Player::initializeStates() {
+    // Создаем и добавляем состояния в словарь
+    m_states["Idle"] = std::make_unique<IdleState>(this);
+    m_states["Moving"] = std::make_unique<MovingState>(this);
+    m_states["Action"] = std::make_unique<ActionState>(this);
+
+    LOG_DEBUG("Player states initialized");
+}
+// Реализация метода getCollisionShape
+CollisionShape Player::getCollisionShape() const {
+    // Возвращаем круговую форму коллизии с заданным радиусом
+    return CollisionShape(m_collisionSize);
 }
