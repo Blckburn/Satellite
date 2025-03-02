@@ -7,6 +7,7 @@
 #include "Camera.h"
 #include <SDL.h>
 #include <memory>
+#include "Player.h"
 
 // Forward declaration
 class Engine;
@@ -63,19 +64,6 @@ public:
      */
     TileMap* getMap() { return m_tileMap.get(); }
 
-    /**
-     * @brief Расчет приоритета визуального порядка для изометрической проекции
-     * @param x Координата X объекта в мировом пространстве
-     * @param y Координата Y объекта в мировом пространстве
-     * @param z Высота объекта
-     * @return Значение приоритета для сортировки
-     */
-    float calculateZOrderPriority(float x, float y, float z);
-
-    /**
-     * @brief Обработка клавиш для перемещения персонажа
-     */
-    void detectKeyInput();
 
     /**
      * @brief Отрисовка отладочной информации
@@ -135,32 +123,12 @@ public:
 private:
 
     int m_currentBiome = 0;  ///< Текущий биом карты
-
-    /**
-     * @brief Проверяет возможность диагонального перемещения
-     * @param fromX Начальная X координата
-     * @param fromY Начальная Y координата
-     * @param toX Конечная X координата
-     * @param toY Конечная Y координата
-     * @return true, если диагональное перемещение возможно, false в противном случае
-     */
-    bool canMoveDiagonally(int fromX, int fromY, int toX, int toY);
+    bool m_showDebug;           ///< Флаг отображения отладочной информации
 
     Engine* m_engine;                           ///< Указатель на движок
     std::shared_ptr<TileMap> m_tileMap;         ///< Карта
     std::shared_ptr<IsometricRenderer> m_isoRenderer; ///< Изометрический рендерер
     std::shared_ptr<TileRenderer> m_tileRenderer;     ///< Рендерер тайлов
     std::shared_ptr<Camera> m_camera;           ///< Камера
-
-    float m_playerX;                            ///< X координата игрока
-    float m_playerY;                            ///< Y координата игрока
-
-    float m_playerSubX;         ///< Позиция внутри тайла по X (0.0-1.0)
-    float m_playerSubY;         ///< Позиция внутри тайла по Y (0.0-1.0)
-    float m_moveSpeed;          ///< Скорость движения персонажа
-    float m_dX;                 ///< Направление движения по X (с плавающей точкой)
-    float m_dY;                 ///< Направление движения по Y (с плавающей точкой)
-
-    bool m_showDebug;           ///< Флаг отображения отладочной информации
-    float m_collisionSize;      ///< Размер коллизии персонажа для отображения
+    std::shared_ptr<Player> m_player;     ///< Указатель на игрока
 };
