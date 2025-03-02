@@ -64,11 +64,11 @@ bool RoomGenerator::generateMap(TileMap* tileMap, BiomeType biomeType)
 
     // Начинаем с центральной комнаты
     Room centralRoom;
+    centralRoom = getBiomeRoomType(biomeType); // Заменяем присвоение type
     centralRoom.x = width / 2 - m_maxRoomSize / 2;
     centralRoom.y = height / 2 - m_maxRoomSize / 2;
     centralRoom.width = getRandomRoomSize();
     centralRoom.height = getRandomRoomSize();
-    centralRoom.type = getBiomeRoomType(biomeType);
 
     rooms.push_back(centralRoom);
 
@@ -268,9 +268,9 @@ void RoomGenerator::addRoomWithCorridor(TileMap* tileMap, std::vector<Room>& roo
 
     // Создаем новую комнату
     Room newRoom;
-    newRoom.width = getRandomRoomSize();
-    newRoom.height = getRandomRoomSize();
-    newRoom.type = getBiomeRoomType(biomeType);
+newRoom = getBiomeRoomType(biomeType); // Заменяем присвоение type
+newRoom.width = getRandomRoomSize();
+newRoom.height = getRandomRoomSize();
 
     // Длина коридора
     int corridorLength = 2 + m_rng() % m_maxCorridorLength;

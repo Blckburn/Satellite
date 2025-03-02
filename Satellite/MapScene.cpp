@@ -4,6 +4,7 @@
 #include <iostream>
 #include <cmath>
 #include "RoomGenerator.h"
+#include "Logger.h"
 
 MapScene::MapScene(const std::string& name, Engine* engine)
     : Scene(name), m_engine(engine), m_playerX(25.0f), m_playerY(25.0f),
@@ -305,7 +306,7 @@ void MapScene::generateTestMap() {
     m_playerSubX = 0.0f;
     m_playerSubY = 0.0f;
 
-   // LOG_INFO("Generated test map with biome type: " + std::to_string(static_cast<int>(biomeType)));
+    LOG_INFO("Generated test map with biome type: " + std::to_string(static_cast<int>(biomeType)));
 }
 
 void MapScene::detectKeyInput() {
