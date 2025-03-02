@@ -80,6 +80,22 @@ public:
     }
 
     /**
+ * @brief Получение уровня логирования для консоли
+ * @return Текущий уровень логирования
+ */
+    LogLevel getConsoleLogLevel() const {
+        return m_consoleLogLevel;
+    }
+
+    /**
+     * @brief Получение уровня логирования для файла
+     * @return Текущий уровень логирования
+     */
+    LogLevel getFileLogLevel() const {
+        return m_fileLogLevel;
+    }
+
+    /**
      * @brief Логирование на уровне Debug
      * @param message Сообщение для логирования
      */
@@ -160,7 +176,13 @@ private:
 
         // Получаем текущее время для префикса
         auto now = std::time(nullptr);
-        auto tm = *std::localtime(&now);
+        std::tm tm_struct;
+#ifdef _WIN32
+        localtime_s(&tm_struct, &now);
+#else
+        localtime_r(&now, &tm_struct);
+#endif
+        auto tm = tm_struct;
         std::ostringstream timeStream;
         timeStream << std::put_time(&tm, "%Y-%m-%d %H:%M:%S");
         std::string timeStr = timeStream.str();

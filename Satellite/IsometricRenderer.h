@@ -132,23 +132,23 @@ public:
         int centerX = 0, int centerY = 0) const;
 
     /**
-     * @brief Отрисовка объемного тайла с улучшенной поддержкой текстур
+     * @brief Отрисовка объемного тайла
      * @param renderer SDL рендерер
-     * @param worldX X координата в мировом пространстве
-     * @param worldY Y координата в мировом пространстве
+     * @param x X координата тайла в мировом пространстве
+     * @param y Y координата тайла в мировом пространстве
      * @param height Высота тайла
-     * @param topTexture Текстура для верхней грани (или nullptr)
-     * @param leftTexture Текстура для левой грани (или nullptr)
-     * @param rightTexture Текстура для правой грани (или nullptr)
-     * @param centerX X координата центра экрана (по умолчанию 0)
-     * @param centerY Y координата центра экрана (по умолчанию 0)
+     * @param centerX X координата центра экрана
+     * @param centerY Y координата центра экрана
+     * @param topTexture Текстура для верхней грани (nullptr для цветной грани)
+     * @param leftTexture Текстура для левой грани (nullptr для цветной грани)
+     * @param rightTexture Текстура для правой грани (nullptr для цветной грани)
+     * @param topColor Цвет верхней грани (используется, если topTexture == nullptr)
+     * @param leftColor Цвет левой грани (используется, если leftTexture == nullptr)
+     * @param rightColor Цвет правой грани (используется, если rightTexture == nullptr)
      */
-    void renderEnhancedVolumetricTile(SDL_Renderer* renderer,
-        float worldX, float worldY, float height,
-        SDL_Texture* topTexture,
-        SDL_Texture* leftTexture,
-        SDL_Texture* rightTexture,
-        int centerX = 0, int centerY = 0) const;
+    void renderVolumetricTile(SDL_Renderer* renderer, float x, float y, float height,
+        int centerX, int centerY, SDL_Texture* topTexture, SDL_Texture* leftTexture,
+        SDL_Texture* rightTexture, SDL_Color topColor, SDL_Color leftColor, SDL_Color rightColor);
 
     /**
      * @brief Отрисовка изометрической сетки
@@ -217,6 +217,20 @@ public:
     float getCameraZoom() const { return m_cameraZoom; }
 
     void renderTexturedDiamond(SDL_Renderer* renderer, SDL_Texture* texture, SDL_Point* points) const;
+
+    /**
+ * @brief Отрисовка плоского тайла
+ * @param renderer SDL рендерер
+ * @param x X координата тайла в мировом пространстве
+ * @param y Y координата тайла в мировом пространстве
+ * @param texture Текстура для отрисовки (nullptr для цветного тайла)
+ * @param color Цвет тайла (используется, если texture == nullptr)
+ * @param centerX X координата центра экрана
+ * @param centerY Y координата центра экрана
+ */
+    void renderFlatTile(SDL_Renderer* renderer, float x, float y,
+        SDL_Texture* texture, SDL_Color color, int centerX, int centerY);
+
 private:
     /**
      * @brief Отрисовка заполненного полигона

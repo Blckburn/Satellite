@@ -79,76 +79,111 @@ void IsometricRenderer::renderTile(SDL_Renderer* renderer, float worldX, float w
     }
 }
 
-void IsometricRenderer::renderVolumetricTile(SDL_Renderer* renderer, float worldX, float worldY, float height,
-    SDL_Color topColor, SDL_Color leftColor, SDL_Color rightColor, int centerX, int centerY) const {
-    if (height <= 0.0f) {
-        // Если высота нулевая или отрицательная, рисуем обычный тайл
-        renderTile(renderer, worldX, worldY, 0.0f, topColor, centerX, centerY);
-        return;
+void IsometricRenderer::renderVolumetricTile(SDL_Renderer* renderer, float x, float y, float height,
+    int centerX, int centerY, SDL_Texture* topTexture, SDL_Texture* leftTexture,
+    SDL_Texture* rightTexture, SDL_Color topColor, SDL_Color leftColor, SDL_Color rightColor) {
+
+    // 1. Преобразование мировых координат в экранные
+    int screenX, screenY;
+    worldToDisplay(x, y, 0.0f, centerX, centerY, screenX, screenY);
+
+    // 2. Вычисление экранных координат для видимых граней
+    int halfWidth = getScaledSize(m_tileWidth / 2);
+    int halfHeight = getScaledSize(m_tileHeight / 2);
+    int heightPixels = getScaledSize(static_cast<int>(height * m_tileHeight));
+
+    // 3. Определение координат вершин для трех видимых граней (верхняя, левая, правая)
+    SDL_Point topFace[5] = {
+        { screenX, screenY - heightPixels - halfHeight },   // Верхняя точка
+        { screenX + halfWidth, screenY - heightPixels },    // Правая точка
+        { screenX, screenY - heightPixels + halfHeight },   // Нижняя точка
+        { screenX - halfWidth, screenY - heightPixels },    // Левая точка
+        { screenX, screenY - heightPixels - halfHeight }    // Замыкаем контур
+    };
+
+    SDL_Point leftFace[5] = {
+        { screenX - halfWidth, screenY - heightPixels },    // Верхняя левая точка
+        { screenX, screenY - heightPixels + halfHeight },   // Верхняя правая точка
+        { screenX, screenY + halfHeight },                  // Нижняя правая точка
+        { screenX - halfWidth, screenY },                   // Нижняя левая точка
+        { screenX - halfWidth, screenY - heightPixels }     // Замыкаем контур
+    };
+
+    SDL_Point rightFace[5] = {
+        { screenX, screenY - heightPixels + halfHeight },   // Верхняя левая точка
+        { screenX + halfWidth, screenY - heightPixels },    // Верхняя правая точка
+        { screenX + halfWidth, screenY },                   // Нижняя правая точка
+        { screenX, screenY + halfHeight },                  // Нижняя левая точка
+        { screenX, screenY - heightPixels + halfHeight }    // Замыкаем контур
+    };
+
+    // 4. Отрисовка граней в порядке "сзади-наперед"
+
+    // 4.1. Правая грань (всегда сзади)
+    if (rightTexture != nullptr) {
+        // TODO: Отрисовка с текстурой
+    }
+    else {
+        SDL_SetRenderDrawColor(renderer, rightColor.r, rightColor.g, rightColor.b, rightColor.a);
+        SDL_Rect rightRect;
+        rightRect.x = std::min({ rightFace[0].x, rightFace[1].x, rightFace[2].x, rightFace[3].x });
+        rightRect.y = std::min({ rightFace[0].y, rightFace[1].y, rightFace[2].y, rightFace[3].y });
+        rightRect.w = std::max({ rightFace[0].x, rightFace[1].x, rightFace[2].x, rightFace[3].x }) - rightRect.x;
+        rightRect.h = std::max({ rightFace[0].y, rightFace[1].y, rightFace[2].y, rightFace[3].y }) - rightRect.y;
+        SDL_RenderFillRect(renderer, &rightRect);
+
+        SDL_SetRenderDrawColor(renderer,
+            static_cast<Uint8>(rightColor.r * 0.8f),
+            static_cast<Uint8>(rightColor.g * 0.8f),
+            static_cast<Uint8>(rightColor.b * 0.8f),
+            rightColor.a);
+        SDL_RenderDrawLines(renderer, rightFace, 5);
     }
 
-    // Используем новую систему координат
-    int baseX, baseY;    // Координаты базовой точки (без учета высоты)
-    worldToScreen(worldX, worldY, baseX, baseY);
+    // 4.2. Левая грань (посередине)
+    if (leftTexture != nullptr) {
+        // TODO: Отрисовка с текстурой
+    }
+    else {
+        SDL_SetRenderDrawColor(renderer, leftColor.r, leftColor.g, leftColor.b, leftColor.a);
+        SDL_Rect leftRect;
+        leftRect.x = std::min({ leftFace[0].x, leftFace[1].x, leftFace[2].x, leftFace[3].x });
+        leftRect.y = std::min({ leftFace[0].y, leftFace[1].y, leftFace[2].y, leftFace[3].y });
+        leftRect.w = std::max({ leftFace[0].x, leftFace[1].x, leftFace[2].x, leftFace[3].x }) - leftRect.x;
+        leftRect.h = std::max({ leftFace[0].y, leftFace[1].y, leftFace[2].y, leftFace[3].y }) - leftRect.y;
+        SDL_RenderFillRect(renderer, &leftRect);
 
-    // Смещение центра экрана
-    baseX += centerX;
-    baseY += centerY;
-
-    // Вычисляем смещение по высоте
-    int heightOffset = getHeightInPixels(height);
-
-    // Вычисляем размеры с учетом масштаба
-    int scaledTileWidth = static_cast<int>(m_tileWidth * m_cameraZoom);
-    int scaledTileHeight = static_cast<int>(m_tileHeight * m_cameraZoom);
-
-    // Вершины для верхней грани (ромб)
-    SDL_Point topFace[4];
-    topFace[0] = { baseX, baseY - heightOffset };                              // Верхняя вершина
-    topFace[1] = { baseX + scaledTileWidth / 2, baseY + scaledTileHeight / 2 - heightOffset }; // Правая вершина
-    topFace[2] = { baseX, baseY + scaledTileHeight - heightOffset };          // Нижняя вершина
-    topFace[3] = { baseX - scaledTileWidth / 2, baseY + scaledTileHeight / 2 - heightOffset }; // Левая вершина
-
-    // Левая грань (четырехугольник)
-    SDL_Point leftFace[4];
-    leftFace[0] = { baseX - scaledTileWidth / 2, baseY + scaledTileHeight / 2 - heightOffset }; // Верхняя левая
-    leftFace[1] = { baseX, baseY + scaledTileHeight - heightOffset }; // Верхняя правая
-    leftFace[2] = { baseX, baseY + scaledTileHeight }; // Нижняя правая
-    leftFace[3] = { baseX - scaledTileWidth / 2, baseY + scaledTileHeight / 2 }; // Нижняя левая
-
-    // Правая грань (четырехугольник)
-    SDL_Point rightFace[4];
-    rightFace[0] = { baseX, baseY + scaledTileHeight - heightOffset }; // Верхняя левая
-    rightFace[1] = { baseX + scaledTileWidth / 2, baseY + scaledTileHeight / 2 - heightOffset }; // Верхняя правая
-    rightFace[2] = { baseX + scaledTileWidth / 2, baseY + scaledTileHeight / 2 }; // Нижняя правая
-    rightFace[3] = { baseX, baseY + scaledTileHeight }; // Нижняя левая
-
-    // Сначала рисуем левую и правую грани, затем верхнюю для правильного перекрытия
-    SDL_SetRenderDrawColor(renderer, leftColor.r, leftColor.g, leftColor.b, leftColor.a);
-    fillPolygon(renderer, leftFace, 4);
-
-    SDL_SetRenderDrawColor(renderer, rightColor.r, rightColor.g, rightColor.b, rightColor.a);
-    fillPolygon(renderer, rightFace, 4);
-
-    SDL_SetRenderDrawColor(renderer, topColor.r, topColor.g, topColor.b, topColor.a);
-    fillPolygon(renderer, topFace, 4);
-
-    // Рисуем контуры для четкости
-    SDL_SetRenderDrawColor(renderer, topColor.r * 0.8, topColor.g * 0.8, topColor.b * 0.8, topColor.a);
-    for (int i = 0; i < 4; ++i) {
-        SDL_RenderDrawLine(renderer, topFace[i].x, topFace[i].y, topFace[(i + 1) % 4].x, topFace[(i + 1) % 4].y);
+        SDL_SetRenderDrawColor(renderer,
+            static_cast<Uint8>(leftColor.r * 0.8f),
+            static_cast<Uint8>(leftColor.g * 0.8f),
+            static_cast<Uint8>(leftColor.b * 0.8f),
+            leftColor.a);
+        SDL_RenderDrawLines(renderer, leftFace, 5);
     }
 
-    SDL_SetRenderDrawColor(renderer, leftColor.r * 0.8, leftColor.g * 0.8, leftColor.b * 0.8, leftColor.a);
-    for (int i = 0; i < 4; ++i) {
-        SDL_RenderDrawLine(renderer, leftFace[i].x, leftFace[i].y, leftFace[(i + 1) % 4].x, leftFace[(i + 1) % 4].y);
+    // 4.3. Верхняя грань (всегда спереди)
+    if (topTexture != nullptr) {
+        // TODO: Отрисовка с текстурой
     }
+    else {
+        SDL_SetRenderDrawColor(renderer, topColor.r, topColor.g, topColor.b, topColor.a);
+        SDL_Rect topRect;
+        topRect.x = std::min({ topFace[0].x, topFace[1].x, topFace[2].x, topFace[3].x });
+        topRect.y = std::min({ topFace[0].y, topFace[1].y, topFace[2].y, topFace[3].y });
+        topRect.w = std::max({ topFace[0].x, topFace[1].x, topFace[2].x, topFace[3].x }) - topRect.x;
+        topRect.h = std::max({ topFace[0].y, topFace[1].y, topFace[2].y, topFace[3].y }) - topRect.y;
+        SDL_RenderFillRect(renderer, &topRect);
 
-    SDL_SetRenderDrawColor(renderer, rightColor.r * 0.8, rightColor.g * 0.8, rightColor.b * 0.8, rightColor.a);
-    for (int i = 0; i < 4; ++i) {
-        SDL_RenderDrawLine(renderer, rightFace[i].x, rightFace[i].y, rightFace[(i + 1) % 4].x, rightFace[(i + 1) % 4].y);
+        SDL_SetRenderDrawColor(renderer,
+            static_cast<Uint8>(topColor.r * 0.8f),
+            static_cast<Uint8>(topColor.g * 0.8f),
+            static_cast<Uint8>(topColor.b * 0.8f),
+            topColor.a);
+        SDL_RenderDrawLines(renderer, topFace, 5);
     }
 }
+
+
 
 void IsometricRenderer::screenToWorld(int screenX, int screenY, float& worldX, float& worldY) const {
     // Обратное изометрическое преобразование с учетом масштаба
@@ -504,4 +539,53 @@ void IsometricRenderer::renderVolumetricTileWithTextures(SDL_Renderer* renderer,
     SDL_RenderDrawLine(renderer, topFace[3].x, topFace[3].y, leftFace[3].x, leftFace[3].y);
     SDL_RenderDrawLine(renderer, topFace[1].x, topFace[1].y, rightFace[2].x, rightFace[2].y);
     SDL_RenderDrawLine(renderer, topFace[2].x, topFace[2].y, leftFace[2].x, leftFace[2].y);
+}
+
+void IsometricRenderer::renderFlatTile(SDL_Renderer* renderer, float x, float y,
+    SDL_Texture* texture, SDL_Color color, int centerX, int centerY) {
+
+    // 1. Преобразование мировых координат в экранные
+    int screenX, screenY;
+    worldToDisplay(x, y, 0.0f, centerX, centerY, screenX, screenY);
+
+    // 2. Вычисление экранных координат для ромба
+    int halfWidth = getScaledSize(m_tileWidth / 2);
+    int halfHeight = getScaledSize(m_tileHeight / 2);
+
+    // 3. Определение координат вершин ромба
+    SDL_Point points[5] = {
+        { screenX, screenY - halfHeight },                // Верхняя точка
+        { screenX + halfWidth, screenY },                 // Правая точка
+        { screenX, screenY + halfHeight },                // Нижняя точка
+        { screenX - halfWidth, screenY },                 // Левая точка
+        { screenX, screenY - halfHeight }                 // Замыкаем контур
+    };
+
+    // 4. Отрисовка тайла
+    if (texture != nullptr) {
+        // TODO: Реализовать отрисовку текстуры в будущем
+        SDL_SetRenderDrawColor(renderer, color.r, color.g, color.b, color.a);
+        SDL_Rect rect;
+        rect.x = std::min({ points[0].x, points[1].x, points[2].x, points[3].x });
+        rect.y = std::min({ points[0].y, points[1].y, points[2].y, points[3].y });
+        rect.w = std::max({ points[0].x, points[1].x, points[2].x, points[3].x }) - rect.x;
+        rect.h = std::max({ points[0].y, points[1].y, points[2].y, points[3].y }) - rect.y;
+        SDL_RenderFillRect(renderer, &rect);
+    }
+    else {
+        SDL_SetRenderDrawColor(renderer, color.r, color.g, color.b, color.a);
+        SDL_Rect rect;
+        rect.x = std::min({ points[0].x, points[1].x, points[2].x, points[3].x });
+        rect.y = std::min({ points[0].y, points[1].y, points[2].y, points[3].y });
+        rect.w = std::max({ points[0].x, points[1].x, points[2].x, points[3].x }) - rect.x;
+        rect.h = std::max({ points[0].y, points[1].y, points[2].y, points[3].y }) - rect.y;
+        SDL_RenderFillRect(renderer, &rect);
+
+        SDL_SetRenderDrawColor(renderer,
+            static_cast<Uint8>(color.r * 0.8f),
+            static_cast<Uint8>(color.g * 0.8f),
+            static_cast<Uint8>(color.b * 0.8f),
+            color.a);
+        SDL_RenderDrawLines(renderer, points, 5);
+    }
 }

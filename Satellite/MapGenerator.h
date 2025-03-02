@@ -21,7 +21,8 @@ public:
         MOUNTAINOUS,    ///< Горный рельеф
         CRATER,         ///< Поверхность с кратерами
         VOLCANIC,       ///< Вулканическая поверхность
-        ALIEN           ///< Инопланетный ландшафт
+        ALIEN,          ///< Инопланетный ландшафт
+        COUNT           // Добавляем COUNT как последний элемент для подсчёта типов
     };
 
     /**
@@ -34,6 +35,18 @@ public:
      * @brief Деструктор
      */
     ~MapGenerator();
+
+    /**
+     * @brief Установка типа генерации
+     * @param type Тип генерации
+     */
+    void setGenerationType(GenerationType type); // Новый метод
+
+    /**
+     * @brief Генерация карты
+     * @param tileMap Указатель на карту для заполнения
+     */
+    void generateMap(TileMap* tileMap); // Новый метод
 
     /**
      * @brief Генерация карты
@@ -75,6 +88,12 @@ public:
      * @param seed Сид (0 = случайный)
      */
     void setSeed(unsigned int seed);
+
+    /**
+     * @brief Получение текущего уровня воды
+     * @return Уровень воды (0.0-1.0)
+     */
+    float getWaterLevel() const { return m_waterLevel; }
 
     /**
      * @brief Получение текущего сида
@@ -292,4 +311,5 @@ private:
     float m_resourceRichness = 0.5f;                    ///< Богатство ресурсами
     float m_noiseScale = 0.1f;                          ///< Масштаб шума
     int m_forcedBiomeId = -1;                           ///< ID биома для принудительной генерации
+    GenerationType m_generationType = GenerationType::DEFAULT; // Добавляем поле для хранения типа генерации
 };

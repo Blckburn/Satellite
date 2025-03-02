@@ -58,6 +58,9 @@ bool MapGenerator::generate(TileMap* tileMap, GenerationType genType) {
         return false;
     }
 
+    // Сохраняем тип генерации
+    m_generationType = genType;
+
     // Проверяем, есть ли биомы
     if (m_biomes.empty() && m_forcedBiomeId == -1) {
         setupDefaultBiomes();
@@ -104,13 +107,17 @@ bool MapGenerator::generate(TileMap* tileMap, GenerationType genType) {
     return true;
 }
 
+void MapGenerator::generateMap(TileMap* tileMap) {
+    generate(tileMap, m_generationType);
+}
+
 void MapGenerator::setupDefaultBiomes() {
     // Очищаем текущие биомы
     clearBiomes();
 
     // 1. Создаем пустынный биом
-    auto desert = std::make_shared<Biome>(1, "Desert");
-    desert->setDescription("Пустынная местность с высокими температурами и низкой влажностью.");
+    auto desert = std::make_shared<Biome>(1, "Desert", SDL_Color{ 200, 200, 100, 255 }, "A dry desert with high temperatures and low humidity.");
+    desert->setDescription("A dry desert with high temperatures and low humidity.");
     desert->setTemperatureRange(30.0f, 50.0f);
     desert->setHumidityRange(0.0f, 0.2f);
     desert->setElevationRange(0.2f, 0.6f);
@@ -128,8 +135,8 @@ void MapGenerator::setupDefaultBiomes() {
     addBiome(desert);
 
     // 2. Создаем тропический лес
-    auto jungle = std::make_shared<Biome>(2, "Jungle");
-    jungle->setDescription("Густой тропический лес с высокой влажностью и богатой растительностью.");
+    auto jungle = std::make_shared<Biome>(2, "Jungle", SDL_Color{ 50, 150, 50, 255 }, "A dense jungle with high humidity and rich vegetation.");
+    jungle->setDescription("A dense jungle with high humidity and rich vegetation.");
     jungle->setTemperatureRange(25.0f, 40.0f);
     jungle->setHumidityRange(0.7f, 1.0f);
     jungle->setElevationRange(0.3f, 0.7f);
@@ -148,8 +155,8 @@ void MapGenerator::setupDefaultBiomes() {
     addBiome(jungle);
 
     // 3. Создаем тундру
-    auto tundra = std::make_shared<Biome>(3, "Tundra");
-    tundra->setDescription("Холодная местность с вечной мерзлотой и скудной растительностью.");
+    auto tundra = std::make_shared<Biome>(3, "Tundra", SDL_Color{ 240, 240, 250, 255 }, "A cold tundra with permafrost and sparse vegetation.");
+    tundra->setDescription("A cold tundra with permafrost and sparse vegetation.");
     tundra->setTemperatureRange(-20.0f, 5.0f);
     tundra->setHumidityRange(0.3f, 0.6f);
     tundra->setElevationRange(0.2f, 0.5f);
@@ -167,8 +174,8 @@ void MapGenerator::setupDefaultBiomes() {
     addBiome(tundra);
 
     // 4. Создаем вулканическую местность
-    auto volcanic = std::make_shared<Biome>(4, "Volcanic");
-    volcanic->setDescription("Активная вулканическая местность с лавовыми потоками и выжженной землей.");
+    auto volcanic = std::make_shared<Biome>(4, "Volcanic", SDL_Color{ 100, 70, 30, 255 }, "An active volcanic area with lava flows and scorched earth.");
+    volcanic->setDescription("An active volcanic area with lava flows and scorched earth.");
     volcanic->setTemperatureRange(40.0f, 90.0f);
     volcanic->setHumidityRange(0.0f, 0.2f);
     volcanic->setElevationRange(0.4f, 0.9f);
@@ -186,8 +193,8 @@ void MapGenerator::setupDefaultBiomes() {
     addBiome(volcanic);
 
     // 5. Создаем умеренную зону
-    auto temperate = std::make_shared<Biome>(5, "Temperate");
-    temperate->setDescription("Умеренный климат с разнообразной растительностью.");
+    auto temperate = std::make_shared<Biome>(5, "Temperate", SDL_Color{ 100, 200, 100, 255 }, "A temperate zone with diverse vegetation and moderate climate.");
+    temperate->setDescription("A temperate zone with diverse vegetation and moderate climate.");
     temperate->setTemperatureRange(5.0f, 25.0f);
     temperate->setHumidityRange(0.4f, 0.7f);
     temperate->setElevationRange(0.3f, 0.6f);
@@ -1575,4 +1582,7 @@ void MapGenerator::createCrater(TileMap* tileMap, int centerX, int centerY, int 
             }
         }
     }
+}
+void MapGenerator::setGenerationType(GenerationType type) {
+    m_generationType = type;
 }

@@ -53,7 +53,7 @@ void TileRenderer::clear() {
         delete tile;
     }
     m_tiles.clear();
-
+    
     // Очищаем кэши рендеринга
     m_tileBatchMap.clear();
 }
@@ -109,7 +109,7 @@ void TileRenderer::render(SDL_Renderer* renderer, int centerX, int centerY) {
 
         // Проверяем, видим ли тайл
         bool isVisible = (screenX >= viewport.x && screenX < viewport.x + viewport.w &&
-            screenY >= viewport.y && screenY < viewport.y + viewport.h);
+                         screenY >= viewport.y && screenY < viewport.y + viewport.h);
 
         if (!isVisible) {
             continue; // Пропускаем отрисовку невидимых тайлов
@@ -117,18 +117,13 @@ void TileRenderer::render(SDL_Renderer* renderer, int centerX, int centerY) {
 
         // Отрисовываем тайл
         if (tile->type == TileRenderType::FLAT) {
-            m_isoRenderer->renderFlatTile(
-                renderer, tile->x, tile->y,
-                centerX, centerY, tile->texture, tile->topColor
-            );
+            m_isoRenderer->renderFlatTile(renderer, tile->x, tile->y,
+                tile->texture, tile->topColor, centerX, centerY);
         }
         else if (tile->type == TileRenderType::VOLUMETRIC) {
-            m_isoRenderer->renderVolumetricTile(
-                renderer, tile->x, tile->y, tile->height,
-                centerX, centerY,
-                tile->texture, tile->leftTexture, tile->rightTexture,
-                tile->topColor, tile->leftColor, tile->rightColor
-            );
+            m_isoRenderer->renderVolumetricTile(renderer, tile->x, tile->y, tile->height,
+                centerX, centerY, tile->texture, tile->leftTexture, tile->rightTexture,
+                tile->topColor, tile->leftColor, tile->rightColor);
         }
 
         renderedTiles++;
@@ -138,12 +133,12 @@ void TileRenderer::render(SDL_Renderer* renderer, int centerX, int centerY) {
     if (Logger::getInstance().getConsoleLogLevel() <= LogLevel::DEBUG && totalTiles > 0) {
         static int frameCounter = 0;
         static int statInterval = 60; // Выводим статистику каждые 60 кадров
-
+        
         if (++frameCounter >= statInterval) {
             float cullRatio = 100.0f * (1.0f - static_cast<float>(renderedTiles) / totalTiles);
-            LOG_DEBUG("Rendering stats: " + std::to_string(renderedTiles) + "/" +
-                std::to_string(totalTiles) + " tiles rendered (" +
-                std::to_string(cullRatio) + "% culled)");
+            LOG_DEBUG("Rendering stats: " + std::to_string(renderedTiles) + "/" + 
+                     std::to_string(totalTiles) + " tiles rendered (" + 
+                     std::to_string(cullRatio) + "% culled)");
             frameCounter = 0;
         }
     }
@@ -160,30 +155,30 @@ void TileRenderer::sortTiles() {
         // 2. Если приоритеты равны, сортируем по глубине (y + x)
         float depthA = a->y + a->x;
         float depthB = b->y + b->x;
-
+        
         if (depthA != depthB) {
             return depthA < depthB;
         }
 
         // 3. Для тайлов на одной глубине, сортируем по высоте
         return a->height < b->height;
-        });
+    });
 }
 
 void TileRenderer::prepareBatches() {
     // Очищаем предыдущие батчи
     m_tileBatchMap.clear();
-
+    
     // Группируем тайлы по текстурам для уменьшения переключений состояния рендерера
     for (auto& tile : m_tiles) {
         // Создаем ключ батча на основе текстур и типа тайла
-        BatchKey key = {
-            tile->type,
-            tile->texture,
-            tile->leftTexture,
-            tile->rightTexture
+        BatchKey key = { 
+            tile->type, 
+            tile->texture, 
+            tile->leftTexture, 
+            tile->rightTexture 
         };
-
+        
         // Добавляем тайл в соответствующий батч
         m_tileBatchMap[key].push_back(tile);
     }

@@ -6,6 +6,7 @@
 #include <vector>
 #include <map>
 #include <random>
+#include <SDL.h> // Убедись, что подключён для SDL_Color
 
 /**
  * @brief Класс для описания биома планеты
@@ -33,8 +34,10 @@ public:
      * @brief Конструктор
      * @param id Идентификатор биома
      * @param name Название биома
+     * @param color Цвет биома
+     * @param description Описание биома (опционально)
      */
-    Biome(int id, const std::string& name);
+    Biome(int id, const std::string& name, const SDL_Color& color, const std::string& description = "");
 
     /**
      * @brief Деструктор
@@ -64,6 +67,12 @@ public:
      * @return Описание биома
      */
     const std::string& getDescription() const { return m_description; }
+
+    /**
+     * @brief Получение цвета биома
+     * @return Цвет биома
+     */
+    const SDL_Color& getColor() const { return m_color; }
 
     /**
      * @brief Установка температурного диапазона
@@ -210,6 +219,7 @@ private:
     int m_id;                                          ///< ID биома
     std::string m_name;                                ///< Название биома
     std::string m_description;                         ///< Описание биома
+    SDL_Color m_color;                                 ///< Цвет биома
 
     float m_minTemperature = -100.0f;                  ///< Минимальная температура
     float m_maxTemperature = 100.0f;                   ///< Максимальная температура
