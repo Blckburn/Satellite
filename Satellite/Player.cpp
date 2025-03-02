@@ -8,7 +8,7 @@ Player::Player(const std::string& name, std::shared_ptr<TileMap> tileMap,
     std::shared_ptr<CollisionSystem> collisionSystem)
     : Entity(name), m_tileMap(tileMap), m_collisionSystem(collisionSystem),
     m_subX(0.5f), m_subY(0.5f), m_moveSpeed(0.05f), m_dX(0.0f), m_dY(0.0f),
-    m_collisionSize(0.35f), m_currentState(nullptr) {
+    m_collisionSize(0.2f), m_currentState(nullptr) { // Уменьшенный размер коллизии с 0.35f до 0.2f
 
     // Устанавливаем цвет игрока
     m_color = { 255, 50, 50, 255 }; // Ярко-красный
@@ -178,23 +178,70 @@ void Player::moveWithCollision(float deltaTime) {
     // 1. Нормализация скорости для разных частот кадров
     float normalizedSpeed = m_moveSpeed * deltaTime * 60.0f;
 
-    // 2. Рассчитываем изменение позиции
-    float deltaX = m_dX * normalizedSpeed;
-    float deltaY = m_dY * normalizedSpeed;
+    // 2. Применяем сглаживание при движении - постепенно уменьшаем скорость вблизи стен
+    // Сначала проверяем, не столкнемся ли мы со стеной при полной скорости
+    float fullDeltaX = m_dX * normalizedSpeed;
+    float fullDeltaY = m_dY * normalizedSpeed;
 
-    // 3. Получаем форму коллизии игрока
-    CollisionShape playerShape(m_collisionSize);
+    // Получаем форму коллизии игрока
+    CollisionShape playerShape(m_collisionSize * 0.8f); // Временно уменьшаем размер для проверки
 
-    // 4. Пытаемся переместить игрока с учетом коллизий
-    CollisionInfo collisionInfo = m_collisionSystem->tryMove(
-        this, playerShape, deltaX, deltaY, true);
+    // Координаты после полного перемещения
+    float fullNextX = m_position.x + fullDeltaX;
+    float fullNextY = m_position.y + fullDeltaY;
 
-    // 5. Обновляем субкоординаты в зависимости от новой позиции
-    // Преобразуем мировые координаты обратно в субкоординаты
+    // Проверяем наличие коллизии при полном перемещении
+    bool willCollide = !m_collisionSystem->canMove(this, playerShape, fullNextX, fullNextY);
+
+    // 3. Если будет коллизия, применяем более осторожное движение с несколькими шагами
+    if (willCollide) {
+        // Количество шагов для плавного движения
+        const int numSteps = 5;
+        float stepDeltaX = fullDeltaX / numSteps;
+        float stepDeltaY = fullDeltaY / numSteps;
+
+        // Перемещаемся пошагово до обнаружения коллизии
+        for (int i = 0; i < numSteps; i++) {
+            float nextX = m_position.x + stepDeltaX;
+            float nextY = m_position.y + stepDeltaY;
+
+            // Проверяем коллизию на этом шаге
+            if (m_collisionSystem->canMove(this, playerShape, nextX, nextY)) {
+                // Если коллизии нет, выполняем этот шаг
+                m_position.x = nextX;
+                m_position.y = nextY;
+            }
+            else {
+                // Если обнаружена коллизия, пробуем скользить вдоль стены
+                bool canMoveX = m_collisionSystem->canMove(this, playerShape, m_position.x + stepDeltaX, m_position.y);
+                bool canMoveY = m_collisionSystem->canMove(this, playerShape, m_position.x, m_position.y + stepDeltaY);
+
+                if (canMoveX) {
+                    m_position.x += stepDeltaX;
+                }
+
+                if (canMoveY) {
+                    m_position.y += stepDeltaY;
+                }
+
+                // Если не можем двигаться ни по X, ни по Y - останавливаемся
+                if (!canMoveX && !canMoveY) {
+                    break;
+                }
+            }
+        }
+    }
+    else {
+        // Если коллизии не будет, просто выполняем полное перемещение
+        m_position.x = fullNextX;
+        m_position.y = fullNextY;
+    }
+
+    // 4. Обновляем субкоординаты в зависимости от новой позиции
     m_subX = m_position.x - std::floor(m_position.x);
     m_subY = m_position.y - std::floor(m_position.y);
 
-    // 6. Гарантируем, что субкоординаты остаются в диапазоне [0, 1)
+    // 5. Гарантируем, что субкоординаты остаются в диапазоне [0, 1)
     if (m_subX >= 1.0f) {
         m_subX -= 1.0f;
     }
@@ -210,6 +257,11 @@ void Player::moveWithCollision(float deltaTime) {
     }
 }
 
+CollisionShape Player::getCollisionShape() const {
+    // Возвращаем круговую форму коллизии с заданным радиусом
+    return CollisionShape(m_collisionSize);
+}
+
 void Player::initializeStates() {
     // Создаем и добавляем состояния в словарь
     m_states["Idle"] = std::make_unique<IdleState>(this);
@@ -217,9 +269,4 @@ void Player::initializeStates() {
     m_states["Action"] = std::make_unique<ActionState>(this);
 
     LOG_DEBUG("Player states initialized");
-}
-// Реализация метода getCollisionShape
-CollisionShape Player::getCollisionShape() const {
-    // Возвращаем круговую форму коллизии с заданным радиусом
-    return CollisionShape(m_collisionSize);
 }

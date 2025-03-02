@@ -731,75 +731,51 @@ void MapScene::renderCollisionDebug(SDL_Renderer* renderer, int centerX, int cen
         // Для круговой формы рисуем окружность
         float radius = playerShape.getRadius();
 
-        // Преобразуем координаты центра в экранные
-        int screenCenterX, screenCenterY;
-        m_isoRenderer->worldToDisplay(
-            playerX, playerY, 0.0f,
-            centerX, centerY, screenCenterX, screenCenterY
-        );
+        // Рисуем две окружности - фактическую и уменьшенную (используемую для проверки)
+        for (int i = 0; i < 2; i++) {
+            float drawRadius = i == 0 ? radius : radius * 0.95f;
 
-        // Рисуем точки вокруг, формирующие окружность
-        SDL_SetRenderDrawColor(renderer, 255, 0, 0, 255); // Красный цвет
-
-        // Количество точек для отрисовки окружности
-        const int numPoints = 32;
-        SDL_Point points[numPoints + 1];
-
-        for (int i = 0; i < numPoints; i++) {
-            float angle = i * 2.0f * M_PI / numPoints;
-            float worldX = playerX + radius * cos(angle);
-            float worldY = playerY + radius * sin(angle);
-
-            int screenX, screenY;
+            // Преобразуем координаты центра в экранные
+            int screenCenterX, screenCenterY;
             m_isoRenderer->worldToDisplay(
-                worldX, worldY, 0.0f,
-                centerX, centerY, screenX, screenY
+                playerX, playerY, 0.0f,
+                centerX, centerY, screenCenterX, screenCenterY
             );
 
-            points[i] = { screenX, screenY };
+            // Количество точек для отрисовки окружности
+            const int numPoints = 32;
+            SDL_Point points[numPoints + 1];
+
+            for (int j = 0; j < numPoints; j++) {
+                float angle = j * 2.0f * M_PI / numPoints;
+                float worldX = playerX + drawRadius * cos(angle);
+                float worldY = playerY + drawRadius * sin(angle);
+
+                int screenX, screenY;
+                m_isoRenderer->worldToDisplay(
+                    worldX, worldY, 0.0f,
+                    centerX, centerY, screenX, screenY
+                );
+
+                points[j] = { screenX, screenY };
+            }
+
+            // Замыкаем контур
+            points[numPoints] = points[0];
+
+            // Цвет для фактической и уменьшенной окружности
+            if (i == 0) {
+                SDL_SetRenderDrawColor(renderer, 255, 0, 0, 255); // Красный для фактической
+            }
+            else {
+                SDL_SetRenderDrawColor(renderer, 0, 255, 0, 255); // Зеленый для уменьшенной
+            }
+
+            SDL_RenderDrawLines(renderer, points, numPoints + 1);
         }
-
-        // Замыкаем контур
-        points[numPoints] = points[0];
-
-        // Рисуем окружность
-        SDL_RenderDrawLines(renderer, points, numPoints + 1);
-    }
-    else if (playerShape.getType() == CollisionShape::Type::RECTANGLE) {
-        // Для прямоугольной формы рисуем прямоугольник
-        float halfWidth = playerShape.getWidth() / 2.0f;
-        float halfHeight = playerShape.getHeight() / 2.0f;
-
-        // Координаты углов прямоугольника
-        float corners[4][2] = {
-            {playerX - halfWidth, playerY - halfHeight}, // Верхний левый
-            {playerX + halfWidth, playerY - halfHeight}, // Верхний правый
-            {playerX + halfWidth, playerY + halfHeight}, // Нижний правый
-            {playerX - halfWidth, playerY + halfHeight}  // Нижний левый
-        };
-
-        // Преобразуем координаты углов в экранные
-        SDL_Point points[5];
-        for (int i = 0; i < 4; i++) {
-            int screenX, screenY;
-            m_isoRenderer->worldToDisplay(
-                corners[i][0], corners[i][1], 0.0f,
-                centerX, centerY, screenX, screenY
-            );
-
-            points[i] = { screenX, screenY };
-        }
-
-        // Замыкаем контур
-        points[4] = points[0];
-
-        // Рисуем прямоугольник
-        SDL_SetRenderDrawColor(renderer, 255, 0, 0, 255); // Красный цвет
-        SDL_RenderDrawLines(renderer, points, 5);
     }
 
-    // Отображение проходимых и непроходимых тайлов
-    // Диапазон тайлов для проверки
+    // Отображение проходимых и непроходимых тайлов вокруг игрока
     int tileRadius = 5;
     int playerTileX = static_cast<int>(playerX);
     int playerTileY = static_cast<int>(playerY);
@@ -834,17 +810,44 @@ void MapScene::renderCollisionDebug(SDL_Renderer* renderer, int centerX, int cen
                 {screenX[0], screenY[0]} // Замыкаем контур
             };
 
-            // Рисуем границы тайла с цветом, зависящим от проходимости
+            // Рисуем границы тайла с разной прозрачностью в зависимости от проходимости
             if (isWalkable) {
-                // Зеленый для проходимых тайлов
-                SDL_SetRenderDrawColor(renderer, 0, 200, 0, 100);
+                // Зеленый для проходимых тайлов, прозрачный
+                SDL_SetRenderDrawColor(renderer, 0, 200, 0, 80);
             }
             else {
-                // Красный для непроходимых тайлов
-                SDL_SetRenderDrawColor(renderer, 200, 0, 0, 100);
+                // Красный для непроходимых тайлов, более заметный
+                SDL_SetRenderDrawColor(renderer, 200, 0, 0, 120);
             }
 
             SDL_RenderDrawLines(renderer, tilePoints, 5);
+
+            // Для непроходимых тайлов рисуем заполненный прямоугольник с полупрозрачностью
+            if (!isWalkable) {
+                // Создаем полигон для заливки
+                int minX = std::min(std::min(screenX[0], screenX[1]), std::min(screenX[2], screenX[3]));
+                int maxX = std::max(std::max(screenX[0], screenX[1]), std::max(screenX[2], screenX[3]));
+                int minY = std::min(std::min(screenY[0], screenY[1]), std::min(screenY[2], screenY[3]));
+                int maxY = std::max(std::max(screenY[0], screenY[1]), std::max(screenY[2], screenY[3]));
+
+                SDL_Rect fillRect = { minX, minY, maxX - minX, maxY - minY };
+                SDL_SetRenderDrawColor(renderer, 200, 0, 0, 30);
+                SDL_RenderFillRect(renderer, &fillRect);
+            }
         }
     }
+
+    // Рисуем информацию о текущем состоянии движения
+    std::string dirStr = "Direction: (" +
+        std::to_string(m_player->getMoveDirectionX()) + ", " +
+        std::to_string(m_player->getMoveDirectionY()) + ")";
+
+    std::string posStr = "Position: (" +
+        std::to_string(playerX) + ", " +
+        std::to_string(playerY) + ")";
+
+    std::string stateStr = "State: " + m_player->getCurrentStateName();
+
+    // В реальном приложении здесь будет код для рендеринга текста
+    // с использованием SDL_ttf
 }

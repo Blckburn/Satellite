@@ -33,29 +33,62 @@ CollisionInfo CollisionSystem::checkMapCollision(
     CollisionInfo info;
     info.entityA = entity;
 
-    // Получаем текущие координаты сущности
-    const auto& position = entity->getPosition();
-    float currentX = position.x;
-    float currentY = position.y;
+    // Выбираем подход в зависимости от типа формы
+    if (shape.getType() == CollisionShape::Type::CIRCLE) {
+        float radius = shape.getRadius();
 
-    // Проверяем коллизию в зависимости от типа формы
-    if (shape.getType() == CollisionShape::Type::POINT) {
-        // Для точечной формы просто проверяем, проходим ли тайл
-        int tileX = static_cast<int>(std::floor(nextX));
-        int tileY = static_cast<int>(std::floor(nextY));
+        // Используем сетку тайлов вокруг центра круга
+        int startTileX = static_cast<int>(std::floor(nextX - radius));
+        int startTileY = static_cast<int>(std::floor(nextY - radius));
+        int endTileX = static_cast<int>(std::ceil(nextX + radius));
+        int endTileY = static_cast<int>(std::ceil(nextY + radius));
 
-        if (!m_tileMap->isValidCoordinate(tileX, tileY) ||
-            !m_tileMap->isTileWalkable(tileX, tileY)) {
+        for (int tileY = startTileY; tileY < endTileY; tileY++) {
+            for (int tileX = startTileX; tileX < endTileX; tileX++) {
+                // Проверяем, находится ли тайл в пределах карты и проходим ли он
+                if (!m_tileMap->isValidCoordinate(tileX, tileY) ||
+                    !m_tileMap->isTileWalkable(tileX, tileY)) {
 
-            info.hasCollision = true;
-            info.tileX = tileX;
-            info.tileY = tileY;
+                    // Определяем ближайшую точку тайла к центру круга
+                    float closestX = std::max(static_cast<float>(tileX),
+                        std::min(nextX, static_cast<float>(tileX + 1.0f)));
+                    float closestY = std::max(static_cast<float>(tileY),
+                        std::min(nextY, static_cast<float>(tileY + 1.0f)));
 
-            // Вычисляем глубину проникновения
-            float centerX = tileX + 0.5f;
-            float centerY = tileY + 0.5f;
-            info.penetrationX = (nextX > centerX) ? (tileX + 1.0f - nextX) : (tileX - nextX);
-            info.penetrationY = (nextY > centerY) ? (tileY + 1.0f - nextY) : (tileY - nextY);
+                    // Вычисляем расстояние от центра круга до ближайшей точки тайла
+                    float distanceX = nextX - closestX;
+                    float distanceY = nextY - closestY;
+                    float distanceSquared = distanceX * distanceX + distanceY * distanceY;
+
+                    // Коллизия обнаружена, если расстояние меньше радиуса
+                    if (distanceSquared < radius * radius) {
+                        info.hasCollision = true;
+                        info.tileX = tileX;
+                        info.tileY = tileY;
+
+                        // Вычисляем глубину проникновения
+                        float distance = std::sqrt(distanceSquared);
+
+                        // Избегаем деления на ноль
+                        if (distance > 0.001f) {
+                            float overlap = radius - distance;
+                            info.penetrationX = overlap * (distanceX / distance);
+                            info.penetrationY = overlap * (distanceY / distance);
+                        }
+                        else {
+                            // Если центр круга находится прямо на границе тайла
+                            info.penetrationX = radius;
+                            info.penetrationY = 0.0f;
+                        }
+
+                        // Снижаем величину проникновения для более плавного движения
+                        info.penetrationX *= 0.8f;
+                        info.penetrationY *= 0.8f;
+
+                        return info; // Возвращаем первую обнаруженную коллизию
+                    }
+                }
+            }
         }
     }
     else if (shape.getType() == CollisionShape::Type::RECTANGLE) {
@@ -308,7 +341,11 @@ bool CollisionSystem::canMove(
     Entity* entity, const CollisionShape& shape,
     float nextX, float nextY, CollisionInfo* outCollision) {
 
-    CollisionInfo info = checkMapCollision(entity, nextX, nextY, shape);
+    // Добавляем небольшой буфер, чтобы разрешить близкое приближение к стенам
+    CollisionShape reducedShape(shape.getType() == CollisionShape::Type::CIRCLE ?
+        shape.getRadius() * 0.95f : shape.getRadius());
+
+    CollisionInfo info = checkMapCollision(entity, nextX, nextY, reducedShape);
 
     if (outCollision) {
         *outCollision = info;
@@ -325,30 +362,76 @@ CollisionInfo CollisionSystem::tryMove(
     float nextX = position.x + deltaX;
     float nextY = position.y + deltaY;
 
-    // Проверяем коллизию при перемещении
+    // 1. Сначала проверяем коллизию при полном перемещении
     CollisionInfo info = checkMapCollision(entity, nextX, nextY, shape);
 
+    // 2. Если нет коллизии, просто перемещаем сущность
     if (!info.hasCollision) {
-        // Если нет коллизии, перемещаем сущность
         entity->setPosition(nextX, nextY, position.z);
-    }
-    else if (slideAlongWalls) {
-        // Пытаемся скользить вдоль стены
-
-        // Проверяем движение только по X
-        CollisionInfo infoX = checkMapCollision(entity, nextX, position.y, shape);
-        if (!infoX.hasCollision) {
-            entity->setPosition(nextX, position.y, position.z);
-        }
-
-        // Проверяем движение только по Y
-        CollisionInfo infoY = checkMapCollision(entity, position.x, nextY, shape);
-        if (!infoY.hasCollision) {
-            entity->setPosition(position.x, nextY, position.z);
-        }
+        return info;
     }
 
-    // Сохраняем информацию о коллизии для отладки
+    // 3. Если включено скольжение вдоль стен, пробуем частичное перемещение
+    if (slideAlongWalls) {
+        // 3.1 Вычисляем направление движения
+        float length = std::sqrt(deltaX * deltaX + deltaY * deltaY);
+        if (length < 0.0001f) return info; // Предотвращаем деление на очень маленькие числа
+
+        float dirX = deltaX / length;
+        float dirY = deltaY / length;
+
+        // 3.2 Постепенно увеличиваем расстояние перемещения до обнаружения коллизии
+        float safeDistance = 0.0f;
+        float maxDistance = length;
+        float testDistance = maxDistance;
+        float precision = 0.01f; // Точность поиска безопасного расстояния
+
+        // Используем двоичный поиск для нахождения максимального безопасного расстояния
+        while (maxDistance - safeDistance > precision) {
+            testDistance = (safeDistance + maxDistance) * 0.5f;
+            float testX = position.x + dirX * testDistance;
+            float testY = position.y + dirY * testDistance;
+
+            if (!checkMapCollision(entity, testX, testY, shape).hasCollision) {
+                safeDistance = testDistance;
+            }
+            else {
+                maxDistance = testDistance;
+            }
+        }
+
+        // 3.3 Перемещаем на безопасное расстояние
+        if (safeDistance > 0.0f) {
+            float safeX = position.x + dirX * safeDistance;
+            float safeY = position.y + dirY * safeDistance;
+            entity->setPosition(safeX, safeY, position.z);
+
+            // 3.4 Пробуем скользить вдоль оси, перпендикулярной направлению столкновения
+            // После перемещения на безопасное расстояние, проверяем возможность движения по осям X и Y
+            float remainingDeltaX = nextX - safeX;
+            float remainingDeltaY = nextY - safeY;
+
+            // Проверяем движение только по X
+            CollisionInfo infoX = checkMapCollision(entity, safeX + remainingDeltaX, safeY, shape);
+            if (!infoX.hasCollision) {
+                entity->setPosition(safeX + remainingDeltaX, safeY, position.z);
+            }
+
+            // Обновляем текущую позицию после возможного перемещения по X
+            const auto& updatedPos = entity->getPosition();
+
+            // Проверяем движение только по Y
+            CollisionInfo infoY = checkMapCollision(entity, updatedPos.x, safeY + remainingDeltaY, shape);
+            if (!infoY.hasCollision) {
+                entity->setPosition(updatedPos.x, safeY + remainingDeltaY, position.z);
+            }
+
+            // Информация о коллизии изменилась, так как мы выполнили частичное перемещение
+            info.hasCollision = false;
+        }
+    }
+
+    // 4. Сохраняем информацию о коллизии для отладки
     if (info.hasCollision) {
         m_debugCollisions.push_back(info);
 
