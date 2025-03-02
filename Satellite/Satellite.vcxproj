@@ -147,6 +147,7 @@
     <ClInclude Include="MapTile.h" />
     <ClInclude Include="RenderableTile.h" />
     <ClInclude Include="ResourceManager.h" />
+    <ClInclude Include="RoomGenerator.h" />
     <ClInclude Include="Scene.h" />
     <ClInclude Include="TestScene.h" />
     <ClInclude Include="TileMap.h" />
@@ -162,6 +163,7 @@
     <ClCompile Include="MapScene.cpp" />
     <ClCompile Include="MapTile.cpp" />
     <ClCompile Include="ResourceManager.cpp" />
+    <ClCompile Include="RoomGenerator.cpp" />
     <ClCompile Include="Scene.cpp" />
     <ClCompile Include="TestScene.cpp" />
     <ClCompile Include="TileMap.cpp" />

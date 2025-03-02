@@ -3,6 +3,7 @@
 #include "ResourceManager.h"
 #include <iostream>
 #include <cmath>
+#include "RoomGenerator.h"
 
 MapScene::MapScene(const std::string& name, Engine* engine)
     : Scene(name), m_engine(engine), m_playerX(25.0f), m_playerY(25.0f),
@@ -284,79 +285,27 @@ void MapScene::generateTestMap() {
     // Очищаем карту
     m_tileMap->clear();
 
-    // 1. Создаем основную комнату в центре
-    m_tileMap->createRoom(20, 20, 30, 30, TileType::FLOOR, TileType::WALL);
+    // Создаем генератор комнат с случайным сидом
+    static RoomGenerator roomGen(static_cast<unsigned int>(std::time(nullptr)));
 
-    // 2. Добавляем комнату сверху
-    m_tileMap->createRoom(22, 12, 28, 18, TileType::FLOOR, TileType::WALL);
+    // Устанавливаем размеры комнат в зависимости от размера карты
+    int minSize = std::max(5, m_tileMap->getWidth() / 10);
+    int maxSize = std::max(minSize + 5, m_tileMap->getWidth() / 5);
+    roomGen.setRoomSizeLimits(minSize, maxSize);
 
-    // 3. Добавляем комнату справа
-    m_tileMap->createRoom(32, 22, 38, 28, TileType::FLOOR, TileType::WALL);
+    // Выбираем случайный тип биома для генерации
+    RoomGenerator::BiomeType biomeType = static_cast<RoomGenerator::BiomeType>(std::rand() % 4 + 1);
 
-    // 4. Добавляем комнату снизу
-    m_tileMap->createRoom(22, 32, 28, 38, TileType::FLOOR, TileType::WALL);
-
-    // 5. Добавляем комнату слева
-    m_tileMap->createRoom(12, 22, 18, 28, TileType::FLOOR, TileType::WALL);
-
-    // 6. Соединяем комнаты коридорами и дверями
-
-    // Коридор сверху
-    m_tileMap->createVerticalCorridor(25, 18, 20, TileType::FLOOR);
-    m_tileMap->createDoor(25, 19);
-
-    // Коридор справа
-    m_tileMap->createHorizontalCorridor(30, 32, 25, TileType::FLOOR);
-    m_tileMap->createDoor(31, 25);
-
-    // Коридор снизу
-    m_tileMap->createVerticalCorridor(25, 30, 32, TileType::FLOOR);
-    m_tileMap->createDoor(25, 31);
-
-    // Коридор слева
-    m_tileMap->createHorizontalCorridor(18, 20, 25, TileType::FLOOR);
-    m_tileMap->createDoor(19, 25);
-
-    // 7. Добавляем немного водных тайлов
-    for (int x = 22; x <= 28; x++) {
-        for (int y = 22; y <= 23; y++) {
-            m_tileMap->setTileType(x, y, TileType::WATER);
-        }
-    }
-
-    // 8. Добавляем травяные тайлы в верхней комнате
-    for (int x = 23; x <= 27; x++) {
-        for (int y = 13; y <= 17; y++) {
-            m_tileMap->setTileType(x, y, TileType::GRASS);
-        }
-    }
-
-    // 9. Добавляем каменные тайлы в правой комнате
-    for (int x = 33; x <= 37; x++) {
-        for (int y = 23; y <= 27; y++) {
-            m_tileMap->setTileType(x, y, TileType::STONE);
-        }
-    }
-
-    // 10. Добавляем деревянные тайлы в нижней комнате
-    for (int x = 23; x <= 27; x++) {
-        for (int y = 33; y <= 37; y++) {
-            m_tileMap->setTileType(x, y, TileType::WOOD);
-        }
-    }
-
-    // 11. Добавляем металлические тайлы в левой комнате
-    for (int x = 13; x <= 17; x++) {
-        for (int y = 23; y <= 27; y++) {
-            m_tileMap->setTileType(x, y, TileType::METAL);
-        }
-    }
+    // Генерируем карту
+    roomGen.generateMap(m_tileMap.get(), biomeType);
 
     // Устанавливаем позицию игрока в центре карты
-    m_playerX = 25.0f;
-    m_playerY = 25.0f;
+    m_playerX = m_tileMap->getWidth() / 2.0f;
+    m_playerY = m_tileMap->getHeight() / 2.0f;
     m_playerSubX = 0.0f;
     m_playerSubY = 0.0f;
+
+   // LOG_INFO("Generated test map with biome type: " + std::to_string(static_cast<int>(biomeType)));
 }
 
 void MapScene::detectKeyInput() {
