@@ -99,6 +99,22 @@ public:
      */
     void resetGenerator();
 
+    /**
+     * @brief Получение списка доступных биомов
+     * @return Вектор биомов
+     */
+    const std::vector<std::shared_ptr<Biome>>& getBiomes() const { return m_biomes; }
+
+    /**
+     * @brief Создание точки интереса на карте
+     * @param tileMap Указатель на карту тайлов
+     * @param centerX Центр по X
+     * @param centerY Центр по Y
+     * @param poiType Тип точки интереса
+     * @param size Размер структуры
+     */
+    void placePOIStructure(TileMap* tileMap, int centerX, int centerY, TileType poiType, int size);
+
 private:
     // Внутренние методы генерации
 
@@ -191,6 +207,22 @@ private:
     void generateWaterBodies(TileMap* tileMap, const std::vector<std::vector<float>>& heightMap);
 
     /**
+     * @brief Создание рек
+     * @param tileMap Указатель на карту
+     * @param heightMap Карта высот
+     */
+    void createRivers(TileMap* tileMap, const std::vector<std::vector<float>>& heightMap);
+
+    /**
+     * @brief Создание реки от заданной точки
+     * @param tileMap Указатель на карту
+     * @param heightMap Карта высот
+     * @param startX Начальная X координата
+     * @param startY Начальная Y координата
+     */
+    void createRiverFromPoint(TileMap* tileMap, const std::vector<std::vector<float>>& heightMap, int startX, int startY);
+
+    /**
      * @brief Сглаживание границ биомов
      * @param tileMap Указатель на карту
      */
@@ -217,6 +249,15 @@ private:
      * @return Значение шума в диапазоне [0, 1]
      */
     float perlinNoise(float x, float y, float scale, int octaves, float persistence, float lacunarity, int seed) const;
+
+    /**
+     * @brief Генерация простого шума для Perlin
+     * @param x X координата
+     * @param y Y координата
+     * @param seed Сид для генератора
+     * @return Значение шума
+     */
+    float generateSimpleNoise(float x, float y, unsigned int seed) const;
 
     /**
      * @brief Генерация шума ворнои

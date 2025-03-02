@@ -1531,12 +1531,12 @@ float MapGenerator::voronoiNoise(float x, float y, float scale, int seed) const 
             float pointY = static_cast<float>(cellY) + dist(rng);
 
             // Расстояние до точки
-            float dx = x - pointX;
-            float dy = y - pointY;
-            float dist = sqrtf(dx * dx + dy * dy);
+            float dxPos = x - pointX;
+            float dyPos = y - pointY;
+            float distance = sqrtf(dx * dx + dy * dy);
 
             // Обновляем минимальное расстояние
-            minDist = std::min(minDist, dist);
+            minDist = std::min(minDist, distance);
         }
     }
 
@@ -1553,9 +1553,9 @@ void MapGenerator::createCrater(TileMap* tileMap, int centerX, int centerY, int 
         for (int x = centerX - radius; x <= centerX + radius; ++x) {
             if (x >= 0 && x < width && y >= 0 && y < height) {
                 // Расстояние от центра кратера
-                float dx = static_cast<float>(x - centerX);
-                float dy = static_cast<float>(y - centerY);
-                float distance = sqrtf(dx * dx + dy * dy);
+                float dxPos = static_cast<float>(x - centerX);
+                float dyPos = static_cast<float>(y - centerY);
+                float distance = sqrtf(dxPos * dxPos + dyPos * dyPos);
 
                 if (distance <= radius) {
                     MapTile* tile = tileMap->getTile(x, y);
@@ -1570,118 +1570,6 @@ void MapGenerator::createCrater(TileMap* tileMap, int centerX, int centerY, int 
 
                         // Устанавливаем тип тайла как кратер
                         tile->setType(TileType::CRATER);
-                    }
-                }
-            }
-        }
-    }
-}
-
-void MapGenerator::placePOIStructure(TileMap* tileMap, int centerX, int centerY, TileType poiType, int size) {
-    int width = tileMap->getWidth();
-    int height = tileMap->getHeight();
-
-    // Создаем точку интереса в виде структуры заданного типа и размера
-    for (int y = centerY - size; y <= centerY + size; ++y) {
-        for (int x = centerX - size; x <= centerX + size; ++x) {
-            if (x >= 0 && x < width && y >= 0 && y < height) {
-                // Расстояние от центра
-                float dx = static_cast<float>(x - centerX);
-                float dy = static_cast<float>(y - centerY);
-                float distance = sqrtf(dx * dx + dy * dy);
-
-                // Базовая форма структуры зависит от ее типа
-                if (distance <= size) {
-                    MapTile* tile = tileMap->getTile(x, y);
-                    if (tile) {
-                        // Вероятность размещения зависит от расстояния
-                        float probability = 1.0f - distance / size;
-
-                        // Добавляем случайность к вероятности
-                        probability = std::min(1.0f, probability * 1.2f);
-
-                        // Решаем, размещать ли точку интереса в этом месте
-                        float rand = static_cast<float>(m_rng()) / static_cast<float>(m_rng.max());
-
-                        if (rand < probability) {
-                            // Размещаем структуру
-                            tile->setType(poiType);
-
-                            // Устанавливаем свойства в зависимости от типа
-                            if (poiType == TileType::RUINS) {
-                                // Руины могут содержать ресурсы
-                                tile->setResourceDensity(std::min(1.0f, tile->getResourceDensity() + 0.3f));
-
-                                // Устанавливаем высоту руин
-                                tile->setHeight(0.3f + 0.5f * rand);
-
-                                // Иногда добавляем декоративные элементы
-                                if (rand > 0.7f) {
-                                    MapTile::Decoration ruinDecor(
-                                        100 + (m_rng() % 3),  // ID декорации: 100-102
-                                        "AncientRuin",        // Имя декорации
-                                        0.8f + 0.4f * rand,   // Случайный масштаб
-                                        false                 // Не анимированная
-                                    );
-                                    tile->addDecoration(ruinDecor);
-                                }
-                            }
-                            else if (poiType == TileType::CRATER) {
-                                // Кратеры имеют отрицательную высоту (впадина)
-                                tile->setHeight(-0.2f * (1.0f - distance / size));
-
-                                // Может быть радиация в кратере
-                                if (rand < 0.3f) {
-                                    tile->setRadiationLevel(0.3f + 0.3f * rand);
-
-                                    // Если есть радиация, добавляем декоративный эффект
-                                    if (rand < 0.15f) {
-                                        MapTile::Decoration radDecor(
-                                            110,                 // ID декорации
-                                            "RadiationEffect",   // Имя декорации
-                                            0.6f + 0.8f * rand,  // Случайный масштаб
-                                            true                 // Анимированная
-                                        );
-                                        tile->addDecoration(radDecor);
-                                    }
-                                }
-                            }
-                            else if (poiType == TileType::ROCK_FORMATION) {
-                                // Скальные образования имеют значительную высоту
-                                tile->setHeight(0.5f + 0.5f * rand);
-
-                                // Могут содержать ресурсы
-                                if (rand < 0.5f) {
-                                    tile->setResourceDensity(std::min(1.0f, tile->getResourceDensity() + 0.2f));
-
-                                    // Если есть ресурсы, иногда добавляем декоративный кристалл
-                                    if (rand < 0.25f) {
-                                        MapTile::Decoration crystalDecor(
-                                            120,                  // ID декорации
-                                            "CrystalFormation",   // Имя декорации
-                                            0.3f + 0.6f * rand,   // Случайный масштаб
-                                            rand < 0.1f           // Иногда анимированный
-                                        );
-                                        tile->addDecoration(crystalDecor);
-                                    }
-                                }
-                            }
-                            else if (poiType == TileType::ALIEN_GROWTH) {
-                                // Инопланетная растительность может быть опасной
-                                if (rand < 0.4f) {
-                                    tile->setRadiationLevel(0.1f + 0.2f * rand);
-                                }
-
-                                // Всегда добавляем декоративный элемент
-                                MapTile::Decoration alienDecor(
-                                    130 + (m_rng() % 5),    // ID декорации: 130-134
-                                    "AlienFlora",           // Имя декорации
-                                    0.6f + 0.8f * rand,     // Случайный масштаб
-                                    rand < 0.6f             // Часто анимированная
-                                );
-                                tile->addDecoration(alienDecor);
-                            }
-                        }
                     }
                 }
             }

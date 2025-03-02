@@ -16,6 +16,7 @@ enum class TileType {
     WATER,      ///< Вода
     GRASS,      ///< Трава
     STONE,      ///< Камень
+    FOREST,   ///< Лес
 
     // Искусственные материалы
     METAL,      ///< Металл
@@ -59,6 +60,7 @@ inline std::string TileTypeToString(TileType type) {
     case TileType::WATER: return "Water";
     case TileType::GRASS: return "Grass";
     case TileType::STONE: return "Stone";
+    case TileType::FOREST: return "FOREST";
 
         // Искусственные материалы
     case TileType::METAL: return "Metal";
@@ -99,6 +101,7 @@ inline bool IsWalkable(TileType type) {
     case TileType::FLOOR:
     case TileType::GRASS:
     case TileType::STONE:
+    case TileType::FOREST:
     case TileType::METAL:
     case TileType::WOOD:
     case TileType::SAND:
@@ -142,6 +145,7 @@ inline bool IsTransparent(TileType type) {
     case TileType::FLOOR:
     case TileType::GRASS:
     case TileType::STONE:
+    case TileType::FOREST:
     case TileType::METAL:
     case TileType::WOOD:
     case TileType::WATER:
@@ -209,6 +213,7 @@ inline float GetDefaultHeight(TileType type) {
         // Без высоты (плоские)
     case TileType::GRASS:
     case TileType::STONE:
+    case TileType::FOREST:
     case TileType::METAL:
     case TileType::WOOD:
     case TileType::GLASS:
@@ -247,6 +252,7 @@ inline bool IsSolidGround(TileType type) {
     case TileType::FLOOR:
     case TileType::GRASS:
     case TileType::STONE:
+    case TileType::FOREST:
     case TileType::METAL:
     case TileType::WOOD:
     case TileType::SAND:

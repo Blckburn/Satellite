@@ -2,6 +2,7 @@
 
 #include "MapGenerator.h"
 #include "TileMap.h"
+#include "WorldGenerator.h"
 #include <memory>
 #include <vector>
 #include <unordered_map>

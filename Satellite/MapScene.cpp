@@ -3,6 +3,8 @@
 #include "ResourceManager.h"
 #include <iostream>
 #include <cmath>
+#include "MapGenerator.h"
+#include <ctime>  // Добавлено для time()
 
 MapScene::MapScene(const std::string& name, Engine* engine)
     : Scene(name), m_engine(engine), m_playerX(25.0f), m_playerY(25.0f),
@@ -284,77 +286,39 @@ void MapScene::generateTestMap() {
     // Очищаем карту
     m_tileMap->clear();
 
+    // Создаем генератор карт с случайным сидом
+    MapGenerator mapGen(static_cast<unsigned int>(std::time(nullptr)));
+
+    // Устанавливаем параметры генерации
+    mapGen.setParameters(
+        20.0f,  // Средняя температура
+        0.5f,   // Влажность
+        0.6f,   // Неровность поверхности
+        0.3f,   // Уровень воды
+        0.5f    // Богатство ресурсами
+    );
+
+    // Устанавливаем биомы по умолчанию
+    mapGen.setupDefaultBiomes();
+
+    // Генерируем карту с типом DEFAULT
+    mapGen.generate(m_tileMap.get(), MapGenerator::GenerationType::DEFAULT);
+
+    // Если предпочитаете использовать оригинальный метод как запасной вариант,
+    // закомментируйте код выше и раскомментируйте этот блок:
+    /*
     // 1. Создаем основную комнату в центре
     m_tileMap->createRoom(20, 20, 30, 30, TileType::FLOOR, TileType::WALL);
 
     // 2. Добавляем комнату сверху
     m_tileMap->createRoom(22, 12, 28, 18, TileType::FLOOR, TileType::WALL);
 
-    // 3. Добавляем комнату справа
-    m_tileMap->createRoom(32, 22, 38, 28, TileType::FLOOR, TileType::WALL);
-
-    // 4. Добавляем комнату снизу
-    m_tileMap->createRoom(22, 32, 28, 38, TileType::FLOOR, TileType::WALL);
-
-    // 5. Добавляем комнату слева
-    m_tileMap->createRoom(12, 22, 18, 28, TileType::FLOOR, TileType::WALL);
-
-    // 6. Соединяем комнаты коридорами и дверями
-
-    // Коридор сверху
-    m_tileMap->createVerticalCorridor(25, 18, 20, TileType::FLOOR);
-    m_tileMap->createDoor(25, 19);
-
-    // Коридор справа
-    m_tileMap->createHorizontalCorridor(30, 32, 25, TileType::FLOOR);
-    m_tileMap->createDoor(31, 25);
-
-    // Коридор снизу
-    m_tileMap->createVerticalCorridor(25, 30, 32, TileType::FLOOR);
-    m_tileMap->createDoor(25, 31);
-
-    // Коридор слева
-    m_tileMap->createHorizontalCorridor(18, 20, 25, TileType::FLOOR);
-    m_tileMap->createDoor(19, 25);
-
-    // 7. Добавляем немного водных тайлов
-    for (int x = 22; x <= 28; x++) {
-        for (int y = 22; y <= 23; y++) {
-            m_tileMap->setTileType(x, y, TileType::WATER);
-        }
-    }
-
-    // 8. Добавляем травяные тайлы в верхней комнате
-    for (int x = 23; x <= 27; x++) {
-        for (int y = 13; y <= 17; y++) {
-            m_tileMap->setTileType(x, y, TileType::GRASS);
-        }
-    }
-
-    // 9. Добавляем каменные тайлы в правой комнате
-    for (int x = 33; x <= 37; x++) {
-        for (int y = 23; y <= 27; y++) {
-            m_tileMap->setTileType(x, y, TileType::STONE);
-        }
-    }
-
-    // 10. Добавляем деревянные тайлы в нижней комнате
-    for (int x = 23; x <= 27; x++) {
-        for (int y = 33; y <= 37; y++) {
-            m_tileMap->setTileType(x, y, TileType::WOOD);
-        }
-    }
-
-    // 11. Добавляем металлические тайлы в левой комнате
-    for (int x = 13; x <= 17; x++) {
-        for (int y = 23; y <= 27; y++) {
-            m_tileMap->setTileType(x, y, TileType::METAL);
-        }
-    }
+    // ... [остальной оригинальный код] ...
+    */
 
     // Устанавливаем позицию игрока в центре карты
-    m_playerX = 25.0f;
-    m_playerY = 25.0f;
+    m_playerX = m_tileMap->getWidth() / 2.0f;
+    m_playerY = m_tileMap->getHeight() / 2.0f;
     m_playerSubX = 0.0f;
     m_playerSubY = 0.0f;
 }

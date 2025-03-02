@@ -78,7 +78,7 @@ public:
      * @param tileMap Указатель на карту для заполнения
      * @return Данные о сгенерированной планете
      */
-    PlanetData generateRandomPlanet(TileMap* tileMap);
+    PlanetData generateRandomPlanet(TileMap* tileMap = nullptr);
 
     /**
      * @brief Генерация планеты с заданными параметрами
@@ -165,6 +165,21 @@ private:
      * @return Сгенерированное название
      */
     std::string generateThematicName(int theme);
+
+    /**
+     * @brief Применение планетарных особенностей к карте
+     * @param tileMap Указатель на карту
+     * @param planetData Данные о планете
+     */
+    void applyPlanetaryFeatures(TileMap* tileMap, const PlanetData& planetData);
+
+    /**
+     * @brief Применение региональных особенностей к карте
+     * @param tileMap Указатель на карту
+     * @param regionData Данные о регионе
+     * @param planetData Данные о планете
+     */
+    void applyRegionalFeatures(TileMap* tileMap, const RegionData& regionData, const PlanetData& planetData);
 
 private:
     unsigned int m_seed;                               ///< Сид генератора

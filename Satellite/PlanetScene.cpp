@@ -30,8 +30,8 @@ bool PlanetScene::initialize() {
     // Инициализация рендерера тайлов
     m_tileRenderer = std::make_shared<TileRenderer>(m_isoRenderer.get());
 
-    // Инициализация генератора миров
-    m_worldGenerator = std::make_shared<WorldGenerator>();
+    // Инициализация генератора миров с случайным сидом
+    m_worldGenerator = std::make_shared<WorldGenerator>(static_cast<unsigned int>(std::time(nullptr)));
 
     // Генерация первой планеты
     generateRandomPlanet();
@@ -726,7 +726,7 @@ void PlanetScene::renderDisplayLegend(SDL_Renderer* renderer) {
 void PlanetScene::generateRandomPlanet() {
     if (!m_worldGenerator || !m_tileMap) return;
 
-    // Генерируем случайную планету
+    // Используем WorldGenerator для создания случайной планеты
     m_planetData = m_worldGenerator->generateRandomPlanet(m_tileMap.get());
 
     // Устанавливаем позицию игрока в центре карты

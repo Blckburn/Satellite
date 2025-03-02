@@ -3,6 +3,7 @@
 #include "PlanetScene.h"
 #include <iostream>
 #include <memory>
+#include <ctime>
 
 int main(int argc, char* argv[]) {
     // Для работы с консольными приложениями Windows
@@ -11,13 +12,13 @@ int main(int argc, char* argv[]) {
 #endif
 
     // 1. Парсинг аргументов командной строки
-    bool usePlanetScene = false;
+    bool usePlanetScene = true; // Изменено на true по умолчанию
     int sceneType = 0;
 
     for (int i = 1; i < argc; i++) {
         std::string arg = argv[i];
-        if (arg == "--planet" || arg == "-p") {
-            usePlanetScene = true;
+        if (arg == "--map" || arg == "-m") {
+            usePlanetScene = false; // Если указан флаг --map, используем старую сцену
         }
         else if (arg == "--scene" || arg == "-s") {
             if (i + 1 < argc) {

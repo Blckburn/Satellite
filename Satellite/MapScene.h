@@ -10,6 +10,7 @@
 
 // Forward declaration
 class Engine;
+class MapGenerator;
 
 /**
  * @brief Сцена для демонстрации системы тайлов и карты
