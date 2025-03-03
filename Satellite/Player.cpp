@@ -75,10 +75,25 @@ void Player::update(float deltaTime) {
         m_currentState->update(deltaTime);
     }
 
-    // 2. Обновление логической позиции
+    // 2. Плавное изменение направления - используем существующие переменные
+    float targetVelocityX = m_dX * MAX_VELOCITY;
+    float targetVelocityY = m_dY * MAX_VELOCITY;
+
+    if (m_dX != 0.0f || m_dY != 0.0f) {
+        // Плавное ускорение
+        m_velocityX = moveTowards(m_velocityX, targetVelocityX, ACCELERATION * deltaTime);
+        m_velocityY = moveTowards(m_velocityY, targetVelocityY, ACCELERATION * deltaTime);
+    }
+    else {
+        // Плавное замедление
+        m_velocityX = moveTowards(m_velocityX, 0.0f, DECELERATION * deltaTime);
+        m_velocityY = moveTowards(m_velocityY, 0.0f, DECELERATION * deltaTime);
+    }
+
+    // 3. Обновление логической позиции
     updateMovement(deltaTime);
 
-    // 3. Обновление визуальной позиции (с интерполяцией)
+    // 4. Обновление визуальной позиции
     updateVisualPosition(deltaTime);
 }
 
@@ -200,41 +215,35 @@ void Player::handleCurrentStateEvent(const SDL_Event& event) {
     }
 }
 
-void Player::setMoveDirection(float dx, float dy) {
-    m_dX = dx;
-    m_dY = dy;
-}
-
 void Player::moveWithCollision(float deltaTime) {
-    // 1. Если нет направления движения, ничего не делаем
+    // Если нет направления движения, выходим
     if (m_dX == 0.0f && m_dY == 0.0f) {
         return;
     }
 
-    // 2. Нормализация скорости для разных частот кадров с ограничением максимального перемещения
-    // Используем меньший множитель и добавляем ограничение максимального перемещения за кадр
+    // Нормализация скорости с ограничением
     float normalizedSpeed = m_moveSpeed * deltaTime * 30.0f;
-    normalizedSpeed = std::min(normalizedSpeed, 0.1f); // Ограничиваем максимальное перемещение за один кадр
+    normalizedSpeed = std::min(normalizedSpeed, 0.05f); // Ограничиваем для плавности
 
-    // 3. Вычисляем целевое перемещение
+    // Вычисляем желаемое перемещение
     float targetDeltaX = m_dX * normalizedSpeed;
     float targetDeltaY = m_dY * normalizedSpeed;
 
-    // 4. Пробуем сначала полное перемещение
+    // Уменьшенная форма коллизии для лучшего скольжения
+    float collisionScale = 0.8f;
+    CollisionShape playerShape(m_collisionSize * collisionScale);
+
+    // Полное перемещение по обеим осям
     float nextX = m_position.x + targetDeltaX;
     float nextY = m_position.y + targetDeltaY;
 
-    // Создаем форму коллизии с небольшим уменьшением для лучшего скольжения
-    CollisionShape playerShape(m_collisionSize * 0.9f);
-
-    // 5. Если полное перемещение возможно, выполняем его
     if (m_collisionSystem->canMove(this, playerShape, nextX, nextY)) {
         m_position.x = nextX;
         m_position.y = nextY;
     }
-    // 6. Иначе пробуем движение по отдельным осям для скольжения
+    // Иначе пробуем раздельное перемещение по осям
     else {
-        // Попытка движения только по X
+        // Сначала проверяем движение по оси X
         if (targetDeltaX != 0.0f) {
             nextX = m_position.x + targetDeltaX;
             if (m_collisionSystem->canMove(this, playerShape, nextX, m_position.y)) {
@@ -242,7 +251,7 @@ void Player::moveWithCollision(float deltaTime) {
             }
         }
 
-        // Попытка движения только по Y
+        // Затем по оси Y
         if (targetDeltaY != 0.0f) {
             nextY = m_position.y + targetDeltaY;
             if (m_collisionSystem->canMove(this, playerShape, m_position.x, nextY)) {
@@ -251,11 +260,11 @@ void Player::moveWithCollision(float deltaTime) {
         }
     }
 
-    // 7. Обновляем субкоординаты в зависимости от новой позиции
+    // Обновляем субкоординаты
     m_subX = m_position.x - std::floor(m_position.x);
     m_subY = m_position.y - std::floor(m_position.y);
 
-    // 8. Гарантируем, что субкоординаты остаются в диапазоне [0, 1)
+    // Нормализация субкоординат
     if (m_subX >= 1.0f) m_subX -= 1.0f;
     else if (m_subX < 0.0f) m_subX += 1.0f;
 
@@ -278,24 +287,29 @@ void Player::initializeStates() {
 }
 
 void Player::updateSmoothDirection(float deltaTime) {
-    // Применяем плавную интерполяцию к направлению движения
-    if (m_currentState && m_currentState->getName() == "Moving") {
-        // В состоянии движения используем направление из State
-        MovingState* movingState = dynamic_cast<MovingState*>(m_currentState);
-        if (movingState) {
-            // Целевое направление уже установлено в m_dX и m_dY из состояния
-            // Но мы можем применить интерполяцию для плавности
-        }
+    // Скорость сглаживания
+    float smoothingSpeed = 8.0f * deltaTime;
+
+    // Интерполируем текущее направление к целевому
+    if (fabs(m_dX - m_targetDX) > 0.01f) {
+        m_dX += (m_targetDX - m_dX) * smoothingSpeed;
     }
-    else if (m_dX != 0.0f || m_dY != 0.0f) {
-        // Если мы не в состоянии движения, но у нас есть направление, плавно уменьшаем его
-        float slowdownFactor = 5.0f * deltaTime;
+    else {
+        m_dX = m_targetDX; // Точное значение при малой разнице
+    }
 
-        if (std::abs(m_dX) < 0.01f) m_dX = 0.0f;
-        else m_dX -= m_dX * slowdownFactor;
+    if (fabs(m_dY - m_targetDY) > 0.01f) {
+        m_dY += (m_targetDY - m_dY) * smoothingSpeed;
+    }
+    else {
+        m_dY = m_targetDY;
+    }
 
-        if (std::abs(m_dY) < 0.01f) m_dY = 0.0f;
-        else m_dY -= m_dY * slowdownFactor;
+    // Нормализация для диагонального движения
+    float length = sqrtf(m_dX * m_dX + m_dY * m_dY);
+    if (length > 1.0f) {
+        m_dX /= length;
+        m_dY /= length;
     }
 }
 
@@ -437,44 +451,47 @@ void Player::updatePhysics(float deltaTime) {
 void Player::updateMovement(float deltaTime) {
     // Если нет направления движения, сохраняем позицию и выходим
     if (m_dX == 0.0f && m_dY == 0.0f) {
-        // Когда персонаж стоит, это хорошее время для сохранения позиции
         if (!m_usingHistory) {
             savePositionToHistory();
         }
         return;
     }
 
-    // Если мы восстанавливаемся после нестабильности, не двигаемся
+    // Если мы в режиме восстановления, даем время на стабилизацию
     if (m_usingHistory) {
+        m_stabilityTime += deltaTime;
+        if (m_stabilityTime > 0.2f) { // Уменьшаем время стабилизации
+            m_usingHistory = false;
+            m_stabilityTime = 0.0f;
+        }
         return;
     }
 
-    // Сохраняем текущую позицию перед движением
+    // Сохраняем текущую позицию
     float oldX = m_position.x;
     float oldY = m_position.y;
 
-    // Используем очень низкую скорость для стабильности логики
-    const float moveSpeed = 2.0f * deltaTime;
+    // Маленький шаг для стабильности
+    const float moveSpeed = 1.5f * deltaTime;
 
     // Рассчитываем перемещение
     float deltaX = m_dX * moveSpeed;
     float deltaY = m_dY * moveSpeed;
 
-    // Коллизия с уменьшенным размером для лучшей проходимости
-    CollisionShape smallerShape(m_collisionSize * 0.7f);
+    // Уменьшенная коллизия
+    CollisionShape smallerShape(m_collisionSize * 0.6f);
 
-    // Проверяем возможность полного перемещения
+    // Проверяем полное перемещение
     bool canMove = m_collisionSystem->canMove(this, smallerShape,
         m_position.x + deltaX,
         m_position.y + deltaY);
 
     if (canMove) {
-        // Перемещаем персонажа в новую позицию
         m_position.x += deltaX;
         m_position.y += deltaY;
     }
     else {
-        // Раздельная проверка по осям для скольжения вдоль стен
+        // Раздельное перемещение по осям
         bool canMoveX = m_collisionSystem->canMove(this, smallerShape,
             m_position.x + deltaX,
             m_position.y);
@@ -483,16 +500,15 @@ void Player::updateMovement(float deltaTime) {
             m_position.x,
             m_position.y + deltaY);
 
-        // Применяем допустимые смещения
         if (canMoveX) m_position.x += deltaX;
         if (canMoveY) m_position.y += deltaY;
     }
 
-    // Обновляем субкоординаты логической позиции
+    // Обновляем субкоординаты
     m_subX = m_position.x - std::floor(m_position.x);
     m_subY = m_position.y - std::floor(m_position.y);
 
-    // Принудительно нормализуем субкоординаты
+    // Нормализуем субкоординаты
     if (m_subX >= 1.0f) {
         m_subX -= 1.0f;
         m_position.x = std::floor(m_position.x) + 1.0f + m_subX;
@@ -511,32 +527,28 @@ void Player::updateMovement(float deltaTime) {
         m_position.y = std::floor(m_position.y) - 1.0f + m_subY;
     }
 
-    // Проверяем, валидна ли новая позиция
-    bool positionIsValid = m_collisionSystem->canMove(this, smallerShape, m_position.x, m_position.y);
+    // Проверяем валидность позиции
+    bool positionIsValid = m_collisionSystem->canMove(this, smallerShape,
+        m_position.x, m_position.y);
 
     if (!positionIsValid) {
-        // Если новая позиция недопустима, пытаемся восстановиться
-        bool recovered = findStablePosition(0.3f);
-
-        if (!recovered) {
-            // Если не удалось восстановиться из истории, возвращаемся к предыдущей позиции
+        // Более мягкое восстановление позиции
+        if (!findStablePosition(0.3f)) {
+            // Возврат к предыдущей позиции
             m_position.x = oldX;
             m_position.y = oldY;
-            m_subX = m_position.x - std::floor(m_position.x);
-            m_subY = m_position.y - std::floor(m_position.y);
 
-            // Если и предыдущая позиция невалидна, принудительно стабилизируем
+            // Проверяем и эту позицию
             if (!m_collisionSystem->canMove(this, smallerShape, m_position.x, m_position.y)) {
                 forceStabilizePosition();
             }
         }
 
-        // Устанавливаем флаг использования истории
         m_usingHistory = true;
         m_stabilityTime = 0.0f;
     }
     else {
-        // Если позиция валидна, сохраняем её в историю
+        // Сохраняем валидную позицию
         savePositionToHistory();
     }
 }
@@ -547,42 +559,31 @@ void Player::updateVisualPosition(float deltaTime) {
     float targetX = m_position.x;
     float targetY = m_position.y;
 
-    // Рассчитываем текущее расстояние между визуальной и логической позицией
+    // Рассчитываем текущее расстояние
     float distanceX = targetX - m_visualX;
     float distanceY = targetY - m_visualY;
     float distance = std::sqrt(distanceX * distanceX + distanceY * distanceY);
 
-    // Если расстояние больше порогового значения, применяем плавное перемещение
-    if (distance > 0.001f) {
-        // Вычисляем максимальное перемещение за этот кадр
-        float maxMove = VISUAL_SMOOTHING * deltaTime;
+    // Адаптивная скорость интерполяции
+    float interpSpeed = VISUAL_SMOOTHING;
 
-        // Если расстояние слишком большое, ограничиваем скорость
-        if (distance > 1.0f) {
-            maxMove = std::min(maxMove, distance * 0.2f); // Ограничение до 20% расстояния
-        }
-
-        // Ограничиваем maxMove для слишком больших значений deltaTime
-        maxMove = std::min(maxMove, 0.5f);
-
-        // Если расстояние меньше maxMove, просто устанавливаем визуальную позицию равной логической
-        if (distance <= maxMove) {
-            m_visualX = targetX;
-            m_visualY = targetY;
-        }
-        else {
-            // Иначе перемещаем визуальную позицию в направлении логической на maxMove
-            float moveX = distanceX * (maxMove / distance);
-            float moveY = distanceY * (maxMove / distance);
-
-            m_visualX += moveX;
-            m_visualY += moveY;
-        }
+    // Ускоряем интерполяцию при большем расстоянии
+    if (distance > 0.5f) {
+        interpSpeed *= 1.5f;
     }
-    else {
-        // Если расстояние очень маленькое, просто устанавливаем визуальную позицию равной логической
+
+    // Максимальная дельта перемещения за кадр
+    float maxDelta = interpSpeed * deltaTime;
+
+    // Если расстояние меньше maxDelta, сразу устанавливаем позицию
+    if (distance <= maxDelta) {
         m_visualX = targetX;
         m_visualY = targetY;
+    }
+    else {
+        // Плавное перемещение в направлении цели
+        m_visualX += (distanceX / distance) * maxDelta;
+        m_visualY += (distanceY / distance) * maxDelta;
     }
 
     // Обновляем визуальные субкоординаты
@@ -690,3 +691,12 @@ void Player::forceStabilizePosition() {
     m_subX = 0.5f;
     m_subY = 0.5f;
 }
+
+void Player::setMoveDirection(float dx, float dy) {
+    // Сохраняем целевое направление
+    m_targetDX = dx;
+    m_targetDY = dy;
+
+    // Постепенное изменение текущего направления будет происходить в update
+}
+
