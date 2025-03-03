@@ -3,6 +3,7 @@
 #include "ResourceManager.h"
 #include <iostream>
 #include <SDL_image.h>
+#include <SDL_ttf.h>
 
 Engine::Engine(const std::string& title, int width, int height)
     : m_title(title), m_width(width), m_height(height), m_isRunning(false),
@@ -27,7 +28,13 @@ bool Engine::initialize() {
         return false;
     }
 
-    // 3. Создание окна
+    // 3. Инициализация SDL_ttf
+    if (TTF_Init() < 0) {
+        std::cerr << "SDL_ttf could not initialize! SDL_ttf Error: " << TTF_GetError() << std::endl;
+        return false;
+    }
+
+    // 4. Создание окна
     m_window = SDL_CreateWindow(
         m_title.c_str(),
         SDL_WINDOWPOS_CENTERED,
@@ -41,7 +48,7 @@ bool Engine::initialize() {
         return false;
     }
 
-    // 4. Создание рендерера
+    // 5. Создание рендерера
     m_renderer = SDL_CreateRenderer(
         m_window, -1,
         SDL_RENDERER_ACCELERATED | SDL_RENDERER_PRESENTVSYNC
@@ -52,10 +59,10 @@ bool Engine::initialize() {
         return false;
     }
 
-    // 5. Установка цвета рендеринга по умолчанию (черный)
+    // 6. Установка цвета рендеринга по умолчанию (черный)
     SDL_SetRenderDrawColor(m_renderer, 0, 0, 0, 255);
 
-    // 6. Инициализация ResourceManager
+    // 7. Инициализация ResourceManager
     m_resourceManager = std::make_shared<ResourceManager>(m_renderer);
     if (!m_resourceManager) {
         std::cerr << "Failed to create ResourceManager!" << std::endl;
@@ -102,7 +109,8 @@ void Engine::shutdown() {
         m_window = nullptr;
     }
 
-    // 3. Завершение работы SDL_image и SDL
+    // 3. Завершение работы SDL_ttf, SDL_image и SDL
+    TTF_Quit();  // Завершение работы SDL_ttf
     IMG_Quit();
     SDL_Quit();
 

@@ -186,6 +186,15 @@ private:
     int m_currentBiome;                         ///< Текущий биом карты
 
     /**
+     * @brief Сокращает длинный текст, если он превышает максимальную длину
+     * @param text Исходный текст
+     * @param maxLength Максимальная длина текста
+     * @return Сокращенный текст или исходный текст, если он короче maxLength
+     */
+    std::string truncateText(const std::string& text, size_t maxLength);
+
+
+    /**
      * @brief Обработка взаимодействия с объектами
      */
     void handleInteraction();

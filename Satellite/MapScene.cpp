@@ -55,6 +55,18 @@ bool MapScene::initialize() {
         std::cerr << "Warning: Failed to link player to collision system" << std::endl;
     }
 
+    // 5.2. Загрузка шрифта для интерфейса
+    if (m_engine && m_engine->getResourceManager()) {
+        // Пытаемся загрузить шрифт (путь нужно адаптировать под вашу структуру проекта)
+        bool fontLoaded = m_engine->getResourceManager()->loadFont("default", "assets/fonts/Font.ttf", 16);
+        if (fontLoaded) {
+            LOG_INFO("Default font loaded successfully");
+        }
+        else {
+            LOG_WARNING("Failed to load default font. Text rendering will be disabled.");
+        }
+    }
+
     // 6. Генерация тестовой карты
     generateTestMap();
 
@@ -187,6 +199,15 @@ void MapScene::handleEvent(const SDL_Event& event) {
     Scene::handleEvent(event);
 }
 
+std::string MapScene::truncateText(const std::string& text, size_t maxLength) {
+    if (text.length() <= maxLength) {
+        return text;
+    }
+
+    // Отрезаем часть текста и добавляем многоточие
+    return text.substr(0, maxLength - 3) + "...";
+}
+
 void MapScene::update(float deltaTime) {
     // 1. Обнаружение нажатий клавиш и обновление игрока
     if (m_player) {
@@ -226,13 +247,72 @@ void MapScene::update(float deltaTime) {
 
         std::shared_ptr<InteractiveObject> nearestObject = findNearestInteractiveObject(playerX, playerY);
         if (nearestObject && nearestObject->isInteractable()) {
-            // Показываем подсказку
-            m_interactionPrompt = nearestObject->getInteractionHint();
+            // Создаем подсказку с информацией об объекте
+            std::string objectName = nearestObject->getName();
+            InteractiveType objectType = nearestObject->getInteractiveType();
+
+            // Формируем подсказку в зависимости от типа объекта
+            std::string actionText = "interact with";
+            std::string typeText = "";
+
+            switch (objectType) {
+            case InteractiveType::PICKUP:
+                actionText = "pick up";
+
+                // Если это предмет, можем получить дополнительную информацию о типе предмета
+                if (auto pickupItem = std::dynamic_pointer_cast<PickupItem>(nearestObject)) {
+                    PickupItem::ItemType itemType = pickupItem->getItemType();
+                    switch (itemType) {
+                    case PickupItem::ItemType::RESOURCE:
+                        typeText = " [Resource]";
+                        break;
+                    case PickupItem::ItemType::WEAPON:
+                        typeText = " [Weapon]";
+                        break;
+                    case PickupItem::ItemType::ARMOR:
+                        typeText = " [Armor]";
+                        break;
+                    case PickupItem::ItemType::CONSUMABLE:
+                        typeText = " [Consumable]";
+                        break;
+                    case PickupItem::ItemType::KEY:
+                        typeText = " [Key]";
+                        break;
+                    default:
+                        typeText = " [Item]";
+                        break;
+                    }
+                }
+                break;
+            case InteractiveType::DOOR:
+                actionText = "open/close";
+                typeText = " [Door]";
+                break;
+            case InteractiveType::SWITCH:
+                actionText = "activate";
+                typeText = " [Switch]";
+                break;
+            case InteractiveType::TERMINAL:
+                actionText = "use";
+                typeText = " [Terminal]";
+                break;
+            case InteractiveType::CONTAINER:
+                actionText = "open";
+                typeText = " [Container]";
+                break;
+            default:
+                // Для других типов используем подсказку по умолчанию
+                break;
+            }
+
+            // Формируем финальный текст подсказки
+            // Сокращаем имя объекта, если оно слишком длинное
+            std::string truncatedName = truncateText(objectName, 20); // Ограничиваем длину имени объекта
+            m_interactionPrompt = "Press E to " + actionText + " " + objectName + typeText;
             m_showInteractionPrompt = true;
             m_interactionPromptTimer = 0.0f;
         }
     }
-
 
     // 3. Обновление базового класса
     Scene::update(deltaTime);
@@ -1106,10 +1186,62 @@ void MapScene::handleInteraction() {
             // Взаимодействие успешно
             LOG_INFO("Interaction with " + nearestObject->getName() + " successful");
 
-            // Отображаем подсказку в течение короткого времени
+            // Формируем сообщение о взаимодействии в зависимости от типа объекта
+            std::string actionMessage;
+
+            if (auto pickupItem = std::dynamic_pointer_cast<PickupItem>(nearestObject)) {
+                // Для предметов
+                PickupItem::ItemType itemType = pickupItem->getItemType();
+                std::string itemTypeStr;
+
+                switch (itemType) {
+                case PickupItem::ItemType::RESOURCE:
+                    itemTypeStr = "Resource";
+                    break;
+                case PickupItem::ItemType::WEAPON:
+                    itemTypeStr = "Weapon";
+                    break;
+                case PickupItem::ItemType::ARMOR:
+                    itemTypeStr = "Armor";
+                    break;
+                case PickupItem::ItemType::CONSUMABLE:
+                    itemTypeStr = "Consumable";
+                    break;
+                case PickupItem::ItemType::KEY:
+                    itemTypeStr = "Key";
+                    break;
+                default:
+                    itemTypeStr = "Item";
+                    break;
+                }
+
+                actionMessage = "Picked up " + nearestObject->getName() + " [" + itemTypeStr + "]";
+            }
+            else {
+                // Для других интерактивных объектов
+                switch (nearestObject->getInteractiveType()) {
+                case InteractiveType::DOOR:
+                    actionMessage = "Operated " + nearestObject->getName();
+                    break;
+                case InteractiveType::SWITCH:
+                    actionMessage = "Activated " + nearestObject->getName();
+                    break;
+                case InteractiveType::TERMINAL:
+                    actionMessage = "Used " + nearestObject->getName();
+                    break;
+                case InteractiveType::CONTAINER:
+                    actionMessage = "Opened " + nearestObject->getName();
+                    break;
+                default:
+                    actionMessage = "Interacted with " + nearestObject->getName();
+                    break;
+                }
+            }
+
+            // Отображаем подсказку с результатом взаимодействия
             m_showInteractionPrompt = true;
             m_interactionPromptTimer = 0.0f;
-            m_interactionPrompt = "Picked up " + nearestObject->getName();
+            m_interactionPrompt = actionMessage;
         }
     }
     else {
@@ -1198,35 +1330,95 @@ void MapScene::renderInteractiveObjects(SDL_Renderer* renderer, int centerX, int
 }
 
 void MapScene::renderInteractionPrompt(SDL_Renderer* renderer) {
-    // В будущем здесь будет отрисовка подсказки для взаимодействия с помощью SDL_ttf
-    // Пока что просто отрисуем прямоугольник с текстом в консоли
+    // Проверяем, должна ли подсказка отображаться
+    if (!m_showInteractionPrompt || m_interactionPrompt.empty()) {
+        return;
+    }
 
     // Получаем размеры окна
     int windowWidth, windowHeight;
     SDL_GetRendererOutputSize(renderer, &windowWidth, &windowHeight);
 
-    // Отрисовываем полупрозрачный прямоугольник внизу экрана
-    SDL_Rect promptRect = {
-        windowWidth / 2 - 150,
-        windowHeight - 50,
-        300,
-        40
-    };
+    // Проверяем, доступен ли ResourceManager и есть ли шрифт
+    if (m_engine && m_engine->getResourceManager() &&
+        m_engine->getResourceManager()->hasFont("default")) {
 
-    // Устанавливаем цвет прямоугольника (полупрозрачный черный)
-    SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_BLEND);
-    SDL_SetRenderDrawColor(renderer, 0, 0, 0, 180);
-    SDL_RenderFillRect(renderer, &promptRect);
+        // Цвет текста (ярко-белый)
+        SDL_Color textColor = { 255, 255, 255, 255 };
 
-    // Рисуем рамку
-    SDL_SetRenderDrawColor(renderer, 255, 255, 255, 255);
-    SDL_RenderDrawRect(renderer, &promptRect);
+        // Создаем временную текстуру с текстом, чтобы определить её размеры
+        TTF_Font* font = m_engine->getResourceManager()->getFont("default");
+        if (!font) return;
 
-    // Отображаем подсказку только при первом взаимодействии, а не каждый кадр
-    static std::string lastPrompt;
-    if (lastPrompt != m_interactionPrompt) {
-        lastPrompt = m_interactionPrompt;
-        LOG_INFO("Interaction prompt: " + m_interactionPrompt);
+        // Получаем размеры текста
+        int textWidth, textHeight;
+        TTF_SizeText(font, m_interactionPrompt.c_str(), &textWidth, &textHeight);
+
+        // Добавляем отступы
+        int padding = 20;
+        int promptWidth = textWidth + padding * 2;
+        int promptHeight = textHeight + padding;
+
+        // Минимальная ширина подложки для коротких сообщений
+        int minWidth = 300;
+        if (promptWidth < minWidth) {
+            promptWidth = minWidth;
+        }
+
+        // Максимальная ширина подложки, не выходящая за пределы экрана
+        int maxWidth = windowWidth - 60; // Оставляем отступ по 30 пикселей с каждой стороны
+        if (promptWidth > maxWidth) {
+            promptWidth = maxWidth;
+        }
+
+        // Отрисовываем полупрозрачный прямоугольник внизу экрана
+        SDL_Rect promptRect = {
+            windowWidth / 2 - promptWidth / 2,
+            windowHeight - 60,
+            promptWidth,
+            promptHeight
+        };
+
+        // Устанавливаем цвет прямоугольника (полупрозрачный черный)
+        SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_BLEND);
+        SDL_SetRenderDrawColor(renderer, 0, 0, 0, 200);  // Немного больше непрозрачности
+        SDL_RenderFillRect(renderer, &promptRect);
+
+        // Рисуем рамку с лучшим визуальным эффектом
+        SDL_SetRenderDrawColor(renderer, 180, 180, 180, 255);  // Серая рамка
+        SDL_RenderDrawRect(renderer, &promptRect);
+
+        // Добавляем внутреннюю рамку для эффекта углубления
+        SDL_Rect innerRect = {
+            promptRect.x + 2,
+            promptRect.y + 2,
+            promptRect.w - 4,
+            promptRect.h - 4
+        };
+        SDL_SetRenderDrawColor(renderer, 100, 100, 100, 255);  // Темно-серая внутренняя рамка
+        SDL_RenderDrawRect(renderer, &innerRect);
+
+        // Для очень длинных текстов, которые могут не поместиться даже в максимальную ширину,
+        // мы можем разбить текст на несколько строк или обрезать, но пока просто отрисуем
+        // с урезанной шириной текстуры
+
+        // Отрисовываем текст с использованием ResourceManager
+        m_engine->getResourceManager()->renderText(
+            renderer,
+            m_interactionPrompt,
+            "default",
+            windowWidth / 2,  // X-координата (центр экрана)
+            windowHeight - 60 + promptHeight / 2, // Y-координата (центр подложки)
+            textColor
+        );
+    }
+    else {
+        // Отображаем подсказку только при первом взаимодействии, если нет доступных шрифтов
+        static std::string lastPrompt;
+        if (lastPrompt != m_interactionPrompt) {
+            lastPrompt = m_interactionPrompt;
+            LOG_INFO("Interaction prompt: " + m_interactionPrompt);
+        }
     }
 }
 
@@ -1259,6 +1451,26 @@ void MapScene::createInteractiveItems() {
     // Хранение уже использованных позиций для предотвращения дублирования
     std::set<std::pair<int, int>> usedPositions;
 
+    // Название биома для специфичных предметов
+    std::string biomeName;
+    switch (m_currentBiome) {
+    case 1: // FOREST
+        biomeName = "Forest";
+        break;
+    case 2: // DESERT
+        biomeName = "Desert";
+        break;
+    case 3: // TUNDRA
+        biomeName = "Tundra";
+        break;
+    case 4: // VOLCANIC
+        biomeName = "Volcanic";
+        break;
+    default:
+        biomeName = "Unknown";
+        break;
+    }
+
     while (itemsPlaced < itemsToPlace && attempts < maxAttempts) {
         // Выбираем случайную позицию на карте
         int x = std::rand() % m_tileMap->getWidth();
@@ -1286,41 +1498,115 @@ void MapScene::createInteractiveItems() {
             // Выбираем случайный тип предмета
             PickupItem::ItemType type = static_cast<PickupItem::ItemType>(std::rand() % 5);
 
-            // Создаем предмет с уникальным именем
+            // Создаем предмет с подробным описательным именем
             std::string itemName;
+            SDL_Color itemColor;
+
             switch (type) {
             case PickupItem::ItemType::RESOURCE:
-                itemName = "Resource Fragment";
+                // Название ресурса в зависимости от биома
+                switch (m_currentBiome) {
+                case 1: // FOREST
+                    itemName = "Exotic Plant Sample";
+                    break;
+                case 2: // DESERT
+                    itemName = "Rare Mineral Deposit";
+                    break;
+                case 3: // TUNDRA
+                    itemName = "Crystallized Ice Core";
+                    break;
+                case 4: // VOLCANIC
+                    itemName = "Volcanic Crystal";
+                    break;
+                default:
+                    itemName = "Unknown Material";
+                    break;
+                }
+                itemColor = { 100, 200, 255, 255 }; // Ярко-голубой для ресурсов
                 break;
+
             case PickupItem::ItemType::WEAPON:
-                itemName = "Energy Weapon";
-                break;
+                // Разные типы оружия
+            {
+                const std::string weaponTypes[] = {
+                    "Pulse Rifle", "Energy Pistol", "Plasma Cannon",
+                    "Laser Knife", "Quantum Disruptor"
+                };
+                int weaponIndex = std::rand() % 5;
+                itemName = weaponTypes[weaponIndex];
+            }
+            itemColor = { 255, 60, 60, 255 }; // Ярко-красный для оружия
+            break;
+
             case PickupItem::ItemType::ARMOR:
-                itemName = "Shield Module";
-                break;
+                // Разные типы брони
+            {
+                const std::string armorTypes[] = {
+                    "Shield Module", "Energy Barrier", "Armor Plating",
+                    "Deflector Array", "Protective Suit"
+                };
+                int armorIndex = std::rand() % 5;
+                itemName = armorTypes[armorIndex];
+            }
+            itemColor = { 60, 60, 255, 255 }; // Ярко-синий для брони
+            break;
+
             case PickupItem::ItemType::CONSUMABLE:
-                itemName = "Health Kit";
-                break;
+                // Расходные материалы
+            {
+                const std::string consumableTypes[] = {
+                    "Health Injector", "Energy Cell", "Oxygen Capsule",
+                    "Nanite Pack", "Stimulant"
+                };
+                int consumableIndex = std::rand() % 5;
+                itemName = consumableTypes[consumableIndex];
+            }
+            itemColor = { 60, 255, 60, 255 }; // Ярко-зеленый для расходников
+            break;
+
             case PickupItem::ItemType::KEY:
-                itemName = "Access Card";
-                break;
+                // Ключи и важные предметы
+            {
+                const std::string keyTypes[] = {
+                    "Access Card", "Security Key", "Data Crystal",
+                    "Command Module", "Encrypted Chip"
+                };
+                int keyIndex = std::rand() % 5;
+                itemName = keyTypes[keyIndex];
+            }
+            itemColor = { 255, 215, 0, 255 }; // Золотой для ключей
+            break;
+
             default:
                 itemName = "Unknown Item";
+                itemColor = { 200, 200, 200, 255 }; // Серый для неизвестных предметов
                 break;
             }
 
             // Добавляем номер для уникальности
-            itemName += " #" + std::to_string(itemsPlaced + 1);
+            std::string uniqueItemName = itemName;
 
             // Создаем предмет
-            auto item = createTestPickupItem(static_cast<float>(x), static_cast<float>(y), itemName, type);
+            auto item = std::make_shared<PickupItem>(uniqueItemName, type);
 
-            // Устанавливаем увеличенный радиус взаимодействия для лучшей доступности
-            if (item) {
-                item->setInteractionRadius(2.0f);
+            // Устанавливаем позицию
+            item->setPosition(static_cast<float>(x), static_cast<float>(y), 0.2f);
+
+            // Устанавливаем цвет
+            item->setColor(itemColor);
+
+            // Устанавливаем радиус взаимодействия
+            item->setInteractionRadius(1.8f);
+
+            // Устанавливаем подсказку
+            item->setInteractionHint("Press E to pick up " + uniqueItemName);
+
+            // Инициализируем предмет
+            if (item->initialize()) {
+                // Добавляем предмет на сцену
+                addInteractiveObject(item);
+                itemsPlaced++;
             }
-
-            itemsPlaced++;
         }
 
         attempts++;
