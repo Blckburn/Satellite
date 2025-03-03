@@ -5,6 +5,8 @@
 #include "TileRenderer.h"
 #include "IsometricRenderer.h"
 #include "Camera.h"
+#include "Player.h"
+#include "CollisionSystem.h"
 #include <SDL.h>
 #include <memory>
 
@@ -127,17 +129,13 @@ public:
     void renderPlayer(SDL_Renderer* renderer, int centerX, int centerY, float priority);
 
     /**
- * @brief Получение текущего биома
- * @return Номер текущего биома
- */
+     * @brief Получение текущего биома
+     * @return Номер текущего биома
+     */
     int getCurrentBiome() const { return m_currentBiome; }
 
-private:
-
-    int m_currentBiome = 0;  ///< Текущий биом карты
-
     /**
-     * @brief Проверяет возможность диагонального перемещения
+     * @brief Проверка возможности диагонального перемещения
      * @param fromX Начальная X координата
      * @param fromY Начальная Y координата
      * @param toX Конечная X координата
@@ -146,21 +144,15 @@ private:
      */
     bool canMoveDiagonally(int fromX, int fromY, int toX, int toY);
 
+private:
     Engine* m_engine;                           ///< Указатель на движок
     std::shared_ptr<TileMap> m_tileMap;         ///< Карта
     std::shared_ptr<IsometricRenderer> m_isoRenderer; ///< Изометрический рендерер
     std::shared_ptr<TileRenderer> m_tileRenderer;     ///< Рендерер тайлов
     std::shared_ptr<Camera> m_camera;           ///< Камера
+    std::shared_ptr<Player> m_player;           ///< Игрок
+    std::shared_ptr<CollisionSystem> m_collisionSystem;  ///< Система коллизий
 
-    float m_playerX;                            ///< X координата игрока
-    float m_playerY;                            ///< Y координата игрока
-
-    float m_playerSubX;         ///< Позиция внутри тайла по X (0.0-1.0)
-    float m_playerSubY;         ///< Позиция внутри тайла по Y (0.0-1.0)
-    float m_moveSpeed;          ///< Скорость движения персонажа
-    float m_dX;                 ///< Направление движения по X (с плавающей точкой)
-    float m_dY;                 ///< Направление движения по Y (с плавающей точкой)
-
-    bool m_showDebug;           ///< Флаг отображения отладочной информации
-    float m_collisionSize;      ///< Размер коллизии персонажа для отображения
+    bool m_showDebug;                           ///< Флаг отображения отладочной информации
+    int m_currentBiome;                         ///< Текущий биом карты
 };
