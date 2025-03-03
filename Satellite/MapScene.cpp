@@ -1,6 +1,7 @@
 ﻿#include "MapScene.h"
 #include "Engine.h"
 #include "ResourceManager.h"
+#include "CollisionSystem.h" 
 #include "Player.h"
 #include <iostream>
 #include <cmath>
@@ -40,6 +41,15 @@ bool MapScene::initialize() {
     if (!m_player->initialize()) {
         std::cerr << "Failed to initialize player" << std::endl;
         return false;
+    }
+
+    // 5.1. Связываем игрока с системой коллизий
+    if (m_player && m_collisionSystem) {
+        m_player->setCollisionSystem(m_collisionSystem.get());
+        std::cout << "Player successfully linked to CollisionSystem" << std::endl;
+    }
+    else {
+        std::cerr << "Warning: Failed to link player to collision system" << std::endl;
     }
 
     // 6. Генерация тестовой карты

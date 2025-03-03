@@ -1,10 +1,12 @@
 ﻿#pragma once
 
-#pragma once
-
 #include "Entity.h"
 #include "TileMap.h"
 #include <SDL.h>
+
+// Forward declaration для предотвращения циклических зависимостей
+class CollisionSystem;
+struct CollisionResult;
 
 /**
  * @brief Класс игрока
@@ -184,6 +186,12 @@ public:
      */
     bool isMoving() const { return m_dX != 0.0f || m_dY != 0.0f; }
 
+    /**
+     * @brief Устанавливает систему коллизий для использования игроком
+     * @param collisionSystem Указатель на систему коллизий
+     */
+    void setCollisionSystem(CollisionSystem* collisionSystem);
+
 private:
     /**
      * @brief Обновление текущего направления на основе вектора движения
@@ -194,6 +202,12 @@ private:
      * @brief Создает цвета для граней игрока на основе основного цвета
      */
     void updateFaceColors();
+
+    /**
+         * @brief Нормализует субкоординаты, чтобы они оставались в диапазоне [0, 1)
+         * и обновляет позицию тайла при выходе за его пределы
+         */
+    void NormalizeSubCoordinates();
 
 private:
     TileMap* m_tileMap;             ///< Указатель на карту для проверки коллизий
@@ -208,4 +222,5 @@ private:
     SDL_Color m_color;              ///< Основной цвет игрока
     SDL_Color m_leftFaceColor;      ///< Цвет левой грани
     SDL_Color m_rightFaceColor;     ///< Цвет правой грани
+    CollisionSystem* m_collisionSystem = nullptr;  ///< Указатель на систему коллизий
 };

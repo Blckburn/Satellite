@@ -1,6 +1,7 @@
 ﻿#include "Player.h"
 #include <cmath>
 #include <iostream>
+#include "CollisionSystem.h"  // Добавить этот include
 
 Player::Player(const std::string& name, TileMap* tileMap)
     : Entity(name), m_tileMap(tileMap), m_currentDirection(Direction::SOUTH),
@@ -90,100 +91,88 @@ void Player::update(float deltaTime)
     // Нормализация скорости для разных частот кадров
     float normalizedSpeed = m_moveSpeed * deltaTime * 60.0f;
 
-    // Рассчитываем следующую позицию
-    float nextSubX = m_subX + m_dX * normalizedSpeed;
-    float nextSubY = m_subY + m_dY * normalizedSpeed;
+    // Рассчитываем дельту передвижения
+    float deltaX = m_dX * normalizedSpeed;
+    float deltaY = m_dY * normalizedSpeed;
 
-    // Определяем, выходит ли персонаж за пределы текущего тайла
-    bool crossingTileBoundaryX = nextSubX >= 1.0f || nextSubX < 0.0f;
-    bool crossingTileBoundaryY = nextSubY >= 1.0f || nextSubY < 0.0f;
+    // Используем систему коллизий для обработки перемещения
+    if (m_collisionSystem) {
+        // Используем улучшенную систему с учётом скольжения вдоль стен
+        CollisionResult collisionResult = m_collisionSystem->handleCollisionWithSliding(
+            currentTileX, currentTileY,
+            m_subX, m_subY,
+            deltaX, deltaY,
+            m_collisionSize
+        );
 
-    // Координаты следующего тайла
-    int nextTileX = currentTileX + (nextSubX >= 1.0f ? 1 : (nextSubX < 0.0f ? -1 : 0));
-    int nextTileY = currentTileY + (nextSubY >= 1.0f ? 1 : (nextSubY < 0.0f ? -1 : 0));
+        // Применяем результаты обработки коллизии
+        m_subX = collisionResult.adjustedX;
+        m_subY = collisionResult.adjustedY;
 
-    // Проверка возможности движения по X
-    bool canMoveX = true;
-    if (crossingTileBoundaryX) {
-        canMoveX = m_tileMap->isValidCoordinate(nextTileX, currentTileY) &&
-            m_tileMap->isTileWalkable(nextTileX, currentTileY);
-    }
-
-    // Проверка возможности движения по Y
-    bool canMoveY = true;
-    if (crossingTileBoundaryY) {
-        canMoveY = m_tileMap->isValidCoordinate(currentTileX, nextTileY) &&
-            m_tileMap->isTileWalkable(currentTileX, nextTileY);
-    }
-
-    // Проверка диагонального движения
-    bool diagonalMove = crossingTileBoundaryX && crossingTileBoundaryY;
-    bool canMoveDiag = true;
-
-    if (diagonalMove) {
-        canMoveDiag = canMoveDiagonally(currentTileX, currentTileY, nextTileX, nextTileY);
-    }
-
-    // Применяем движение с учетом коллизий
-    if (canMoveX && (!diagonalMove || canMoveDiag)) {
-        m_subX = nextSubX;
-
-        // Если перешли в новый тайл, обновляем координаты
-        if (nextSubX >= 1.0f) {
-            m_position.x += 1.0f;
-            m_subX -= 1.0f;
-        }
-        else if (nextSubX < 0.0f) {
-            m_position.x -= 1.0f;
-            m_subX += 1.0f;
-        }
-    }
-    else if (crossingTileBoundaryX) {
-        // Останавливаемся у границы тайла
-        m_subX = nextSubX >= 1.0f ? 0.99f : 0.01f;
+        // ВАЖНО: Только здесь обрабатываем переход на новый тайл
+        NormalizeSubCoordinates();
     }
     else {
-        m_subX = nextSubX; // Двигаемся в пределах текущего тайла
-    }
+        // Запасной вариант, если система коллизий недоступна
+        // Рассчитываем следующую позицию
+        float nextSubX = m_subX + deltaX;
+        float nextSubY = m_subY + deltaY;
 
-    if (canMoveY && (!diagonalMove || canMoveDiag)) {
-        m_subY = nextSubY;
+        // Определяем, выходит ли персонаж за пределы текущего тайла
+        bool crossingTileBoundaryX = nextSubX >= 1.0f || nextSubX < 0.0f;
+        bool crossingTileBoundaryY = nextSubY >= 1.0f || nextSubY < 0.0f;
 
-        // Если перешли в новый тайл, обновляем координаты
-        if (nextSubY >= 1.0f) {
-            m_position.y += 1.0f;
-            m_subY -= 1.0f;
+        // Координаты следующего тайла
+        int nextTileX = currentTileX + (nextSubX >= 1.0f ? 1 : (nextSubX < 0.0f ? -1 : 0));
+        int nextTileY = currentTileY + (nextSubY >= 1.0f ? 1 : (nextSubY < 0.0f ? -1 : 0));
+
+        // Проверка возможности движения по X
+        bool canMoveX = true;
+        if (crossingTileBoundaryX) {
+            canMoveX = m_tileMap->isValidCoordinate(nextTileX, currentTileY) &&
+                m_tileMap->isTileWalkable(nextTileX, currentTileY);
         }
-        else if (nextSubY < 0.0f) {
-            m_position.y -= 1.0f;
-            m_subY += 1.0f;
+
+        // Проверка возможности движения по Y
+        bool canMoveY = true;
+        if (crossingTileBoundaryY) {
+            canMoveY = m_tileMap->isValidCoordinate(currentTileX, nextTileY) &&
+                m_tileMap->isTileWalkable(currentTileX, nextTileY);
         }
-    }
-    else if (crossingTileBoundaryY) {
-        // Останавливаемся у границы тайла
-        m_subY = nextSubY >= 1.0f ? 0.99f : 0.01f;
-    }
-    else {
-        m_subY = nextSubY; // Двигаемся в пределах текущего тайла
-    }
 
-    // Гарантируем, что субкоординаты остаются в диапазоне [0, 1)
-    if (m_subX >= 1.0f) {
-        m_position.x += 1.0f;
-        m_subX -= 1.0f;
-    }
-    else if (m_subX < 0.0f) {
-        m_position.x -= 1.0f;
-        m_subX += 1.0f;
-    }
+        // Проверка диагонального движения
+        bool diagonalMove = crossingTileBoundaryX && crossingTileBoundaryY;
+        bool canMoveDiag = true;
 
-    if (m_subY >= 1.0f) {
-        m_position.y += 1.0f;
-        m_subY -= 1.0f;
-    }
-    else if (m_subY < 0.0f) {
-        m_position.y -= 1.0f;
-        m_subY += 1.0f;
+        if (diagonalMove) {
+            canMoveDiag = canMoveDiagonally(currentTileX, currentTileY, nextTileX, nextTileY);
+        }
+
+        // Применяем движение с учетом коллизий
+        if (canMoveX && (!diagonalMove || canMoveDiag)) {
+            m_subX = nextSubX;
+        }
+        else if (crossingTileBoundaryX) {
+            // Останавливаемся у границы тайла
+            m_subX = nextSubX >= 1.0f ? 0.99f : 0.01f;
+        }
+        else {
+            m_subX = nextSubX; // Двигаемся в пределах текущего тайла
+        }
+
+        if (canMoveY && (!diagonalMove || canMoveDiag)) {
+            m_subY = nextSubY;
+        }
+        else if (crossingTileBoundaryY) {
+            // Останавливаемся у границы тайла
+            m_subY = nextSubY >= 1.0f ? 0.99f : 0.01f;
+        }
+        else {
+            m_subY = nextSubY; // Двигаемся в пределах текущего тайла
+        }
+
+        // ВАЖНО: Обрабатываем переход на новый тайл
+        NormalizeSubCoordinates();
     }
 }
 
@@ -277,4 +266,29 @@ void Player::updateFaceColors()
         static_cast<Uint8>(m_color.b * 0.5f),
         m_color.a
     };
+}
+
+void Player::setCollisionSystem(CollisionSystem* collisionSystem) {
+    m_collisionSystem = collisionSystem;
+}
+
+void Player::NormalizeSubCoordinates() {
+    // Гарантирует, что субкоординаты всегда в пределах [0, 1)
+    while (m_subX >= 1.0f) {
+        m_position.x += 1.0f;
+        m_subX -= 1.0f;
+    }
+    while (m_subX < 0.0f) {
+        m_position.x -= 1.0f;
+        m_subX += 1.0f;
+    }
+
+    while (m_subY >= 1.0f) {
+        m_position.y += 1.0f;
+        m_subY -= 1.0f;
+    }
+    while (m_subY < 0.0f) {
+        m_position.y -= 1.0f;
+        m_subY += 1.0f;
+    }
 }
