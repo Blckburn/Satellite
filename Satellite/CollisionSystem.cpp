@@ -341,17 +341,85 @@ bool CollisionSystem::canMove(
     Entity* entity, const CollisionShape& shape,
     float nextX, float nextY, CollisionInfo* outCollision) {
 
-    // Добавляем небольшой буфер, чтобы разрешить близкое приближение к стенам
-    CollisionShape reducedShape(shape.getType() == CollisionShape::Type::CIRCLE ?
-        shape.getRadius() * 0.95f : shape.getRadius());
-
-    CollisionInfo info = checkMapCollision(entity, nextX, nextY, reducedShape);
-
-    if (outCollision) {
-        *outCollision = info;
+    // 1. Проверяем валидность координат
+    if (std::isnan(nextX) || std::isnan(nextY)) {
+        if (outCollision) {
+            outCollision->hasCollision = true;
+        }
+        return false;
     }
 
-    return !info.hasCollision;
+    // 2. Форма должна быть круговой для корректной работы
+    if (shape.getType() != CollisionShape::Type::CIRCLE) {
+        // Для некруговых форм используем упрощённую проверку по центру
+        return m_tileMap->isValidCoordinate(static_cast<int>(nextX), static_cast<int>(nextY)) &&
+            m_tileMap->isTileWalkable(static_cast<int>(nextX), static_cast<int>(nextY));
+    }
+
+    // 3. Для круговой формы проверяем все тайлы в радиусе
+    float radius = shape.getRadius();
+
+    // Определяем границы тайлов для проверки с небольшим запасом
+    int startTileX = static_cast<int>(floor(nextX - radius - 0.1f));
+    int startTileY = static_cast<int>(floor(nextY - radius - 0.1f));
+    int endTileX = static_cast<int>(ceil(nextX + radius + 0.1f));
+    int endTileY = static_cast<int>(ceil(nextY + radius + 0.1f));
+
+    // 4. Проверяем все тайлы в области потенциальной коллизии
+    for (int tileY = startTileY; tileY <= endTileY; tileY++) {
+        for (int tileX = startTileX; tileX <= endTileX; tileX++) {
+            // Проверяем, находится ли тайл в пределах карты
+            if (!m_tileMap->isValidCoordinate(tileX, tileY)) {
+                // За пределами карты - считаем непроходимым
+                if (outCollision) {
+                    outCollision->hasCollision = true;
+                    outCollision->tileX = tileX;
+                    outCollision->tileY = tileY;
+                }
+                return false;
+            }
+
+            // Если тайл непроходим, проверяем коллизию
+            if (!m_tileMap->isTileWalkable(tileX, tileY)) {
+                // Находим ближайшую точку тайла к центру круга
+                float closestX = std::max(static_cast<float>(tileX),
+                    std::min(nextX, static_cast<float>(tileX + 1.0f)));
+                float closestY = std::max(static_cast<float>(tileY),
+                    std::min(nextY, static_cast<float>(tileY + 1.0f)));
+
+                // Вычисляем расстояние от центра круга до ближайшей точки тайла
+                float distanceX = nextX - closestX;
+                float distanceY = nextY - closestY;
+                float distanceSquared = distanceX * distanceX + distanceY * distanceY;
+
+                // Если расстояние меньше радиуса, есть коллизия
+                if (distanceSquared < radius * radius) {
+                    if (outCollision) {
+                        outCollision->hasCollision = true;
+                        outCollision->entityA = entity;
+                        outCollision->tileX = tileX;
+                        outCollision->tileY = tileY;
+
+                        // Вычисляем глубину проникновения
+                        float distance = std::sqrt(distanceSquared);
+                        if (distance > 0.001f) {
+                            float overlap = radius - distance;
+                            outCollision->penetrationX = overlap * (distanceX / distance);
+                            outCollision->penetrationY = overlap * (distanceY / distance);
+                        }
+                        else {
+                            outCollision->penetrationX = radius;
+                            outCollision->penetrationY = 0.0f;
+                        }
+                    }
+                    return false;
+                }
+            }
+        }
+    }
+
+    // Коллизий не обнаружено
+    return true;
 }
 
 CollisionInfo CollisionSystem::tryMove(

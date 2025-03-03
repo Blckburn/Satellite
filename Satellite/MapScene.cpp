@@ -98,11 +98,12 @@ void MapScene::update(float deltaTime) {
         m_player->update(deltaTime);
     }
 
-    // 2. Привязка камеры к игроку
+    // 2. Привязка камеры к ВИЗУАЛЬНОЙ позиции игрока
     if (m_player && m_camera) {
+        // ИЗМЕНЕНИЕ: Используем визуальные координаты вместо логических
         m_camera->setPosition(
-            m_player->getPlayerX() + m_player->getPlayerSubX(),
-            m_player->getPlayerY() + m_player->getPlayerSubY()
+            m_player->getVisualX() + m_player->getVisualSubX(),
+            m_player->getVisualY() + m_player->getVisualSubY()
         );
     }
 
@@ -257,59 +258,107 @@ void MapScene::generateTestMap() {
 void MapScene::renderDebug(SDL_Renderer* renderer, int centerX, int centerY) {
     if (!m_player) return;
 
-    // Получаем координаты персонажа
-    float playerFullX = m_player->getPlayerX() + m_player->getPlayerSubX();
-    float playerFullY = m_player->getPlayerY() + m_player->getPlayerSubY();
+    // ОТОБРАЖЕНИЕ ОБЕИХ ПОЗИЦИЙ: ЛОГИЧЕСКОЙ И ВИЗУАЛЬНОЙ
+
+    // Получаем логические координаты персонажа
+    float playerLogicX = m_player->getPlayerX() + m_player->getPlayerSubX();
+    float playerLogicY = m_player->getPlayerY() + m_player->getPlayerSubY();
+
+    // Получаем визуальные координаты персонажа
+    float playerVisualX = m_player->getVisualX() + m_player->getVisualSubX();
+    float playerVisualY = m_player->getVisualY() + m_player->getVisualSubY();
+
     float collisionSize = m_player->getCollisionSize();
 
-    // 1. Отображение коллизионного прямоугольника персонажа
-    int screenX[4], screenY[4];
+    // 1. Отображение ЛОГИЧЕСКОЙ коллизионной области (жёлтым)
+    int screenLogicX[4], screenLogicY[4];
 
-    // Получаем экранные координаты для каждого угла коллизионной области
     // Верхний левый угол
     m_isoRenderer->worldToDisplay(
-        playerFullX - collisionSize,
-        playerFullY - collisionSize,
-        0.0f, centerX, centerY, screenX[0], screenY[0]
+        playerLogicX - collisionSize,
+        playerLogicY - collisionSize,
+        0.0f, centerX, centerY, screenLogicX[0], screenLogicY[0]
     );
 
     // Верхний правый угол
     m_isoRenderer->worldToDisplay(
-        playerFullX + collisionSize,
-        playerFullY - collisionSize,
-        0.0f, centerX, centerY, screenX[1], screenY[1]
+        playerLogicX + collisionSize,
+        playerLogicY - collisionSize,
+        0.0f, centerX, centerY, screenLogicX[1], screenLogicY[1]
     );
 
     // Нижний правый угол
     m_isoRenderer->worldToDisplay(
-        playerFullX + collisionSize,
-        playerFullY + collisionSize,
-        0.0f, centerX, centerY, screenX[2], screenY[2]
+        playerLogicX + collisionSize,
+        playerLogicY + collisionSize,
+        0.0f, centerX, centerY, screenLogicX[2], screenLogicY[2]
     );
 
     // Нижний левый угол
     m_isoRenderer->worldToDisplay(
-        playerFullX - collisionSize,
-        playerFullY + collisionSize,
-        0.0f, centerX, centerY, screenX[3], screenY[3]
+        playerLogicX - collisionSize,
+        playerLogicY + collisionSize,
+        0.0f, centerX, centerY, screenLogicX[3], screenLogicY[3]
     );
 
-    // Рисуем коллизионную область
-    SDL_Point collisionPoints[5] = {
-        {screenX[0], screenY[0]},
-        {screenX[1], screenY[1]},
-        {screenX[2], screenY[2]},
-        {screenX[3], screenY[3]},
-        {screenX[0], screenY[0]} // Замыкаем контур
+    // Рисуем логическую коллизионную область (жёлтую)
+    SDL_Point logicPoints[5] = {
+        {screenLogicX[0], screenLogicY[0]},
+        {screenLogicX[1], screenLogicY[1]},
+        {screenLogicX[2], screenLogicY[2]},
+        {screenLogicX[3], screenLogicY[3]},
+        {screenLogicX[0], screenLogicY[0]} // Замыкаем контур
     };
 
-    // Рисуем жёлтую коллизионную рамку
     SDL_SetRenderDrawColor(renderer, 255, 255, 0, 255);
-    SDL_RenderDrawLines(renderer, collisionPoints, 5);
+    SDL_RenderDrawLines(renderer, logicPoints, 5);
 
-    // 2. Отображение границ текущего тайла
-    int currentTileX = static_cast<int>(playerFullX);
-    int currentTileY = static_cast<int>(playerFullY);
+    // 2. Отображение ВИЗУАЛЬНОЙ коллизионной области (синим)
+    int screenVisualX[4], screenVisualY[4];
+
+    // Верхний левый угол
+    m_isoRenderer->worldToDisplay(
+        playerVisualX - collisionSize,
+        playerVisualY - collisionSize,
+        0.0f, centerX, centerY, screenVisualX[0], screenVisualY[0]
+    );
+
+    // Верхний правый угол
+    m_isoRenderer->worldToDisplay(
+        playerVisualX + collisionSize,
+        playerVisualY - collisionSize,
+        0.0f, centerX, centerY, screenVisualX[1], screenVisualY[1]
+    );
+
+    // Нижний правый угол
+    m_isoRenderer->worldToDisplay(
+        playerVisualX + collisionSize,
+        playerVisualY + collisionSize,
+        0.0f, centerX, centerY, screenVisualX[2], screenVisualY[2]
+    );
+
+    // Нижний левый угол
+    m_isoRenderer->worldToDisplay(
+        playerVisualX - collisionSize,
+        playerVisualY + collisionSize,
+        0.0f, centerX, centerY, screenVisualX[3], screenVisualY[3]
+    );
+
+    // Рисуем визуальную коллизионную область (синюю)
+    SDL_Point visualPoints[5] = {
+        {screenVisualX[0], screenVisualY[0]},
+        {screenVisualX[1], screenVisualY[1]},
+        {screenVisualX[2], screenVisualY[2]},
+        {screenVisualX[3], screenVisualY[3]},
+        {screenVisualX[0], screenVisualY[0]} // Замыкаем контур
+    };
+
+    SDL_SetRenderDrawColor(renderer, 0, 128, 255, 255);
+    SDL_RenderDrawLines(renderer, visualPoints, 5);
+
+    // 3. Отображение границ текущего тайла
+    int currentTileX = static_cast<int>(playerVisualX);
+    int currentTileY = static_cast<int>(playerVisualY);
 
     int tileScreenX[4], tileScreenY[4];
 
@@ -350,11 +399,11 @@ void MapScene::renderDebug(SDL_Renderer* renderer, int centerX, int centerY) {
     SDL_SetRenderDrawColor(renderer, 0, 255, 255, 255);
     SDL_RenderDrawLines(renderer, tilePoints, 5);
 
-    // 3. Отображение окрестных тайлов и информации о проходимости
+    // 4. Отображение соседних тайлов и информации о проходимости
     int neighborOffsets[8][2] = {
-        {-1, -1}, {0, -1}, {1, -1},  // Верхний ряд тайлов
-        {-1, 0},            {1, 0},   // Средний ряд (без центра)
-        {-1, 1},  {0, 1},  {1, 1}     // Нижний ряд тайлов
+        {-1, -1}, {0, -1}, {1, -1},  // Верхний ряд
+        {-1, 0},            {1, 0},   // Средний ряд
+        {-1, 1},  {0, 1},  {1, 1}     // Нижний ряд
     };
 
     for (int i = 0; i < 8; i++) {
@@ -415,7 +464,7 @@ void MapScene::renderDebug(SDL_Renderer* renderer, int centerX, int centerY) {
         }
     }
 
-    // 4. Отображение информации о текущем состоянии игрока
+    // 5. Отображение информации о текущем состоянии игрока
     // Положение текста с информацией о состоянии
     int textX = 20;
     int textY = 20;
@@ -444,24 +493,14 @@ void MapScene::renderDebug(SDL_Renderer* renderer, int centerX, int centerY) {
     }
 
     // Рисуем фон для текста
-    SDL_Rect textBg = { textX - 5, textY - 5, 210, 60 };
+    SDL_Rect textBg = { textX - 5, textY - 5, 300, 60 };
     SDL_SetRenderDrawColor(renderer, 0, 0, 0, 180);
     SDL_RenderFillRect(renderer, &textBg);
     SDL_SetRenderDrawColor(renderer, textColor.r, textColor.g, textColor.b, 255);
     SDL_RenderDrawRect(renderer, &textBg);
 
-    // В реальном проекте здесь будет использоваться SDL_ttf для отрисовки текста
-    // Но пока обойдемся без этого, поскольку мы не настроили работу с шрифтами
-
-    // Отрисовка положения игрока (в реальности используйте SDL_ttf)
-    std::string posStr = "Pos: (" +
-        std::to_string(static_cast<int>(playerFullX)) + "." +
-        std::to_string(static_cast<int>(m_player->getPlayerSubX() * 100)) + ", " +
-        std::to_string(static_cast<int>(playerFullY)) + "." +
-        std::to_string(static_cast<int>(m_player->getPlayerSubY() * 100)) + ")";
-
-    // В реальном проекте здесь будет код для отрисовки текста с состоянием и позицией
-    renderCollisionDebug(renderer, centerX, centerY);
+    // Отображение позиций в отладочной информации (имитация текста)
+    // Логическая: жёлтая линия, Визуальная: синяя линия  
 }
 
 void MapScene::renderWithBlockSorting(SDL_Renderer* renderer, int centerX, int centerY) {
@@ -470,9 +509,10 @@ void MapScene::renderWithBlockSorting(SDL_Renderer* renderer, int centerX, int c
     // 1. Очистка рендерера перед отрисовкой
     m_tileRenderer->clear();
 
-    // 2. Получение координат игрока и определение текущего блока
-    float playerFullX = m_player->getPlayerX() + m_player->getPlayerSubX();
-    float playerFullY = m_player->getPlayerY() + m_player->getPlayerSubY();
+    // 2. Получение ВИЗУАЛЬНЫХ координат игрока 
+    // ИЗМЕНЕНИЕ: Используем визуальные координаты вместо логических
+    float playerFullX = m_player->getVisualX() + m_player->getVisualSubX();
+    float playerFullY = m_player->getVisualY() + m_player->getVisualSubY();
 
     // Определяем блок, в котором находится игрок (2x2 тайла)
     int blockColStart = static_cast<int>(playerFullX);
@@ -695,9 +735,9 @@ void MapScene::renderPlayerIndicator(SDL_Renderer* renderer, int centerX, int ce
 void MapScene::renderPlayer(SDL_Renderer* renderer, int centerX, int centerY, float priority) {
     if (!m_player) return;
 
-    // Полные координаты игрока
-    float playerFullX = m_player->getPlayerX() + m_player->getPlayerSubX();
-    float playerFullY = m_player->getPlayerY() + m_player->getPlayerSubY();
+    // ИЗМЕНЕНИЕ: Используем визуальные координаты вместо логических
+    float playerFullX = m_player->getVisualX() + m_player->getVisualSubX();
+    float playerFullY = m_player->getVisualY() + m_player->getVisualSubY();
 
     // Цвета для игрока
     SDL_Color playerColor = { 255, 50, 50, 255 };      // Ярко-красный верх
