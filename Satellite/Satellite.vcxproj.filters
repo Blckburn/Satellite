@@ -63,6 +63,24 @@
     <ClInclude Include="MapScene.h">
       <Filter>include</Filter>
     </ClInclude>
+    <ClInclude Include="InteractiveObject.h">
+      <Filter>include</Filter>
+    </ClInclude>
+    <ClInclude Include="CollisionSystem.h">
+      <Filter>include</Filter>
+    </ClInclude>
+    <ClInclude Include="Logger.h">
+      <Filter>include</Filter>
+    </ClInclude>
+    <ClInclude Include="Player.h">
+      <Filter>include</Filter>
+    </ClInclude>
+    <ClInclude Include="RoomGenerator.h">
+      <Filter>include</Filter>
+    </ClInclude>
+    <ClInclude Include="PickupItem.h">
+      <Filter>include</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="Engine.cpp">
@@ -99,6 +117,21 @@
       <Filter>src</Filter>
     </ClCompile>
     <ClCompile Include="MapScene.cpp">
+      <Filter>src</Filter>
+    </ClCompile>
+    <ClCompile Include="InteractiveObject.cpp">
+      <Filter>src</Filter>
+    </ClCompile>
+    <ClCompile Include="CollisionSystem.cpp">
+      <Filter>src</Filter>
+    </ClCompile>
+    <ClCompile Include="Player.cpp">
+      <Filter>src</Filter>
+    </ClCompile>
+    <ClCompile Include="RoomGenerator.cpp">
+      <Filter>src</Filter>
+    </ClCompile>
+    <ClCompile Include="PickupItem.cpp">
       <Filter>src</Filter>
     </ClCompile>
   </ItemGroup>

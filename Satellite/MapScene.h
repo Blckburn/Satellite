@@ -9,6 +9,9 @@
 #include "CollisionSystem.h"
 #include <SDL.h>
 #include <memory>
+#include "InteractiveObject.h"
+#include "PickupItem.h"
+#include <vector>
 
 // Forward declaration
 class Engine;
@@ -144,7 +147,33 @@ public:
      */
     bool canMoveDiagonally(int fromX, int fromY, int toX, int toY);
 
+    /**
+  * @brief Добавление интерактивного объекта на сцену
+  * @param object Указатель на интерактивный объект
+  */
+    void addInteractiveObject(std::shared_ptr<InteractiveObject> object);
+
+    /**
+     * @brief Удаление интерактивного объекта со сцены
+     * @param object Указатель на интерактивный объект
+     */
+    void removeInteractiveObject(std::shared_ptr<InteractiveObject> object);
+
+    /**
+     * @brief Создание тестового предмета для подбора
+     * @param x X-координата
+     * @param y Y-координата
+     * @param name Имя предмета
+     * @param type Тип предмета
+     * @return Указатель на созданный предмет
+     */
+    std::shared_ptr<PickupItem> createTestPickupItem(float x, float y, const std::string& name, PickupItem::ItemType type);
+
 private:
+    std::vector<std::shared_ptr<InteractiveObject>> m_interactiveObjects;  ///< Интерактивные объекты на сцене
+    float m_interactionPromptTimer;                                        ///< Таймер для отображения подсказки
+    std::string m_interactionPrompt;                                       ///< Текст подсказки для взаимодействия
+    bool m_showInteractionPrompt;                                          ///< Флаг отображения подсказки
     Engine* m_engine;                           ///< Указатель на движок
     std::shared_ptr<TileMap> m_tileMap;         ///< Карта
     std::shared_ptr<IsometricRenderer> m_isoRenderer; ///< Изометрический рендерер
@@ -155,4 +184,37 @@ private:
 
     bool m_showDebug;                           ///< Флаг отображения отладочной информации
     int m_currentBiome;                         ///< Текущий биом карты
+
+    /**
+     * @brief Обработка взаимодействия с объектами
+     */
+    void handleInteraction();
+
+    /**
+     * @brief Поиск ближайшего интерактивного объекта
+     * @param playerX X-координата игрока
+     * @param playerY Y-координата игрока
+     * @return Указатель на ближайший интерактивный объект или nullptr
+     */
+    std::shared_ptr<InteractiveObject> findNearestInteractiveObject(float playerX, float playerY);
+
+    /**
+     * @brief Отрисовка интерактивных объектов
+     * @param renderer SDL рендерер
+     * @param centerX X-координата центра экрана
+     * @param centerY Y-координата центра экрана
+     */
+    void renderInteractiveObjects(SDL_Renderer* renderer, int centerX, int centerY);
+
+    /**
+     * @brief Отрисовка подсказки для взаимодействия
+     * @param renderer SDL рендерер
+     */
+    void renderInteractionPrompt(SDL_Renderer* renderer);
+
+    /**
+    * @brief Создает интерактивные предметы на карте
+    */
+    void createInteractiveItems();
+
 };

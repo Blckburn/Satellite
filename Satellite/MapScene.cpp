@@ -7,6 +7,7 @@
 #include <cmath>
 #include "RoomGenerator.h"
 #include "Logger.h"
+#include <set>
 
 MapScene::MapScene(const std::string& name, Engine* engine)
     : Scene(name), m_engine(engine), m_showDebug(false) {
@@ -17,6 +18,8 @@ MapScene::~MapScene() {
 }
 
 bool MapScene::initialize() {
+
+    std::cout << "MapScene::initialize() - Starting initialization" << std::endl;
     // 1. Инициализация изометрического рендерера
     m_isoRenderer = std::make_shared<IsometricRenderer>(64, 32);
 
@@ -59,6 +62,14 @@ bool MapScene::initialize() {
     m_camera->setTarget(&m_player->getPosition().x, &m_player->getPosition().y);
 
     std::cout << "MapScene initialized successfully" << std::endl;
+
+    // Инициализация параметров для интерактивных объектов
+    m_interactionPromptTimer = 0.0f;
+    m_showInteractionPrompt = false;
+    m_interactionPrompt = "";
+
+    std::cout << "Interactive objects initialized: " << m_interactiveObjects.size() << std::endl;
+
     return true;
 }
 
@@ -167,6 +178,11 @@ void MapScene::handleEvent(const SDL_Event& event) {
         }
     }
 
+    // Обработка взаимодействия с объектами
+    if (event.type == SDL_KEYDOWN && event.key.keysym.sym == SDLK_e) {
+        handleInteraction();
+    }
+
     // Передаем события в базовый класс
     Scene::handleEvent(event);
 }
@@ -180,6 +196,43 @@ void MapScene::update(float deltaTime) {
 
     // 2. Обновление камеры
     m_camera->update(deltaTime);
+
+    // Обновление интерактивных объектов
+    auto it = m_interactiveObjects.begin();
+    while (it != m_interactiveObjects.end()) {
+        if ((*it)->isActive()) {
+            (*it)->update(deltaTime);
+            ++it;
+        }
+        else {
+            // Удаляем неактивные объекты
+            it = m_interactiveObjects.erase(it);
+        }
+    }
+
+    // Обновление таймера подсказки
+    if (m_showInteractionPrompt) {
+        m_interactionPromptTimer += deltaTime;
+        // Скрываем подсказку через 2 секунды
+        if (m_interactionPromptTimer > 2.0f) {
+            m_showInteractionPrompt = false;
+        }
+    }
+
+    // Проверка наличия объектов для взаимодействия
+    if (m_player) {
+        float playerX = m_player->getFullX();
+        float playerY = m_player->getFullY();
+
+        std::shared_ptr<InteractiveObject> nearestObject = findNearestInteractiveObject(playerX, playerY);
+        if (nearestObject && nearestObject->isInteractable()) {
+            // Показываем подсказку
+            m_interactionPrompt = nearestObject->getInteractionHint();
+            m_showInteractionPrompt = true;
+            m_interactionPromptTimer = 0.0f;
+        }
+    }
+
 
     // 3. Обновление базового класса
     Scene::update(deltaTime);
@@ -206,7 +259,7 @@ void MapScene::render(SDL_Renderer* renderer) {
     m_isoRenderer->setCameraPosition(m_camera->getX(), m_camera->getY());
     m_isoRenderer->setCameraZoom(m_camera->getZoom());
 
-    // Используем блочную сортировку для отрисовки тайлов и игрока
+    // Используем блочную сортировку для отрисовки тайлов, игрока и интерактивных объектов
     renderWithBlockSorting(renderer, centerX, centerY);
 
     // Добавляем индикатор игрока, чтобы его можно было видеть за стенами
@@ -216,7 +269,13 @@ void MapScene::render(SDL_Renderer* renderer) {
     if (m_showDebug) {
         renderDebug(renderer, centerX, centerY);
     }
+
+    // Отрисовка подсказки для взаимодействия
+    if (m_showInteractionPrompt) {
+        renderInteractionPrompt(renderer);
+    }
 }
+
 
 void MapScene::generateTestMap() {
     // Очищаем карту
@@ -328,6 +387,16 @@ void MapScene::generateTestMap() {
         m_player->setSubX(0.5f);
         m_player->setSubY(0.5f);
     }
+
+    if (m_player) {
+        m_player->setPosition(playerX, playerY, 0.0f);
+        // Устанавливаем субкоординаты в центр тайла
+        m_player->setSubX(0.5f);
+        m_player->setSubY(0.5f);
+    }
+
+    // Создаем интерактивные предметы на карте
+    createInteractiveItems();
 
     LOG_INFO("Generated test map with biome type: " + std::to_string(static_cast<int>(biomeType)));
 }
@@ -545,18 +614,86 @@ void MapScene::renderWithBlockSorting(SDL_Renderer* renderer, int centerX, int c
 
     // 6. ЭТАП 2: ОПРЕДЕЛЕНИЕ ОБЩЕГО ПОРЯДКА ОТРИСОВКИ ОБЪЕКТОВ
 
-    // 6.1. Отрисовка объектов и персонажа с учетом блочного порядка
+    // Добавляем интерактивные объекты в список для сортировки
+    struct RenderObject {
+        enum class Type { TILE, PLAYER, INTERACTIVE } type;
+        float x, y, z;
+        int tileX, tileY;
+        float priority;
+        std::shared_ptr<InteractiveObject> interactiveObj;
+    };
+
+    std::vector<RenderObject> objectsToRender;
+
+    // 6.0. Добавляем интерактивные объекты в список сортировки
+    for (auto& object : m_interactiveObjects) {
+        if (!object->isActive()) continue;
+
+        float objectX = object->getPosition().x;
+        float objectY = object->getPosition().y;
+        float objectZ = object->getPosition().z;
+
+        // Пропускаем объекты вне видимой области
+        if (objectX < startX - 5 || objectX > endX + 5 ||
+            objectY < startY - 5 || objectY > endY + 5) {
+            continue;
+        }
+
+        float priority = calculateZOrderPriority(objectX, objectY, objectZ);
+
+        RenderObject renderObj;
+        renderObj.type = RenderObject::Type::INTERACTIVE;
+        renderObj.x = objectX;
+        renderObj.y = objectY;
+        renderObj.z = objectZ;
+        renderObj.tileX = static_cast<int>(objectX);
+        renderObj.tileY = static_cast<int>(objectY);
+        renderObj.priority = priority;
+        renderObj.interactiveObj = object;
+
+        objectsToRender.push_back(renderObj);
+    }
+
+    // 6.1. Отрисовка объемных тайлов и персонажа с учетом блочного порядка
     // Сначала блоки перед блоком игрока
     for (int y = startY; y < blockRowStart; y++) {
         for (int x = startX; x <= endX; x++) {
-            addVolumetricTileToRenderer(x, y, depth++);
+            const MapTile* tile = m_tileMap->getTile(x, y);
+            if (tile && tile->getType() != TileType::EMPTY && tile->getHeight() > 0.0f) {
+                float priority = calculateZOrderPriority(static_cast<float>(x), static_cast<float>(y), tile->getHeight());
+
+                RenderObject renderObj;
+                renderObj.type = RenderObject::Type::TILE;
+                renderObj.x = x;
+                renderObj.y = y;
+                renderObj.z = tile->getHeight();
+                renderObj.tileX = x;
+                renderObj.tileY = y;
+                renderObj.priority = priority;
+
+                objectsToRender.push_back(renderObj);
+            }
         }
     }
 
     // 6.2. Отрисовка объектов в том же ряду, но перед блоком игрока
     for (int y = blockRowStart; y < blockRowStart + 2; y++) {
         for (int x = startX; x < blockColStart; x++) {
-            addVolumetricTileToRenderer(x, y, depth++);
+            const MapTile* tile = m_tileMap->getTile(x, y);
+            if (tile && tile->getType() != TileType::EMPTY && tile->getHeight() > 0.0f) {
+                float priority = calculateZOrderPriority(static_cast<float>(x), static_cast<float>(y), tile->getHeight());
+
+                RenderObject renderObj;
+                renderObj.type = RenderObject::Type::TILE;
+                renderObj.x = x;
+                renderObj.y = y;
+                renderObj.z = tile->getHeight();
+                renderObj.tileX = x;
+                renderObj.tileY = y;
+                renderObj.priority = priority;
+
+                objectsToRender.push_back(renderObj);
+            }
         }
     }
 
@@ -572,29 +709,183 @@ void MapScene::renderWithBlockSorting(SDL_Renderer* renderer, int centerX, int c
 
             // Если это тайл с игроком, то рисуем его
             if (isPlayerTile) {
-                renderPlayer(renderer, centerX, centerY, depth++);
+                RenderObject renderObj;
+                renderObj.type = RenderObject::Type::PLAYER;
+                renderObj.x = playerFullX;
+                renderObj.y = playerFullY;
+                renderObj.z = m_player->getHeight();
+                renderObj.tileX = static_cast<int>(playerFullX);
+                renderObj.tileY = static_cast<int>(playerFullY);
+                renderObj.priority = calculateZOrderPriority(playerFullX, playerFullY, m_player->getHeight()) + 0.5f; // Небольшой приоритет для игрока
+
+                objectsToRender.push_back(renderObj);
             }
 
             // Затем добавляем стены или другие объемные объекты в этом тайле
-            addVolumetricTileToRenderer(x, y, depth++);
+            const MapTile* tile = m_tileMap->getTile(x, y);
+            if (tile && tile->getType() != TileType::EMPTY && tile->getHeight() > 0.0f) {
+                float priority = calculateZOrderPriority(static_cast<float>(x), static_cast<float>(y), tile->getHeight());
+
+                RenderObject renderObj;
+                renderObj.type = RenderObject::Type::TILE;
+                renderObj.x = x;
+                renderObj.y = y;
+                renderObj.z = tile->getHeight();
+                renderObj.tileX = x;
+                renderObj.tileY = y;
+                renderObj.priority = priority;
+
+                objectsToRender.push_back(renderObj);
+            }
         }
     }
 
     // 6.4. Отрисовка объектов в том же ряду, но после блока игрока
     for (int y = blockRowStart; y < blockRowStart + 2; y++) {
         for (int x = blockColStart + 2; x <= endX; x++) {
-            addVolumetricTileToRenderer(x, y, depth++);
+            const MapTile* tile = m_tileMap->getTile(x, y);
+            if (tile && tile->getType() != TileType::EMPTY && tile->getHeight() > 0.0f) {
+                float priority = calculateZOrderPriority(static_cast<float>(x), static_cast<float>(y), tile->getHeight());
+
+                RenderObject renderObj;
+                renderObj.type = RenderObject::Type::TILE;
+                renderObj.x = x;
+                renderObj.y = y;
+                renderObj.z = tile->getHeight();
+                renderObj.tileX = x;
+                renderObj.tileY = y;
+                renderObj.priority = priority;
+
+                objectsToRender.push_back(renderObj);
+            }
         }
     }
 
     // 6.5. Отрисовка объектов после блока игрока
     for (int y = blockRowStart + 2; y <= endY; y++) {
         for (int x = startX; x <= endX; x++) {
-            addVolumetricTileToRenderer(x, y, depth++);
+            const MapTile* tile = m_tileMap->getTile(x, y);
+            if (tile && tile->getType() != TileType::EMPTY && tile->getHeight() > 0.0f) {
+                float priority = calculateZOrderPriority(static_cast<float>(x), static_cast<float>(y), tile->getHeight());
+
+                RenderObject renderObj;
+                renderObj.type = RenderObject::Type::TILE;
+                renderObj.x = x;
+                renderObj.y = y;
+                renderObj.z = tile->getHeight();
+                renderObj.tileX = x;
+                renderObj.tileY = y;
+                renderObj.priority = priority;
+
+                objectsToRender.push_back(renderObj);
+            }
         }
     }
 
-    // 7. Отрисовка всех добавленных тайлов
+    // 7. Сортируем все объекты по приоритету
+    std::sort(objectsToRender.begin(), objectsToRender.end(),
+        [](const RenderObject& a, const RenderObject& b) {
+            return a.priority < b.priority;
+        });
+
+    // 8. Отрисовываем отсортированные объекты
+    for (const auto& obj : objectsToRender) {
+        switch (obj.type) {
+        case RenderObject::Type::TILE: {
+            const MapTile* tile = m_tileMap->getTile(obj.tileX, obj.tileY);
+            if (tile) {
+                float height = tile->getHeight();
+                SDL_Color color = tile->getColor();
+
+                // Создаем оттенки для граней
+                SDL_Color topColor = color;
+                SDL_Color leftColor = {
+                    static_cast<Uint8>(color.r * 0.7f),
+                    static_cast<Uint8>(color.g * 0.7f),
+                    static_cast<Uint8>(color.b * 0.7f),
+                    color.a
+                };
+                SDL_Color rightColor = {
+                    static_cast<Uint8>(color.r * 0.5f),
+                    static_cast<Uint8>(color.g * 0.5f),
+                    static_cast<Uint8>(color.b * 0.5f),
+                    color.a
+                };
+
+                m_tileRenderer->addVolumetricTile(
+                    obj.x, obj.y, height,
+                    nullptr, nullptr, nullptr,
+                    topColor, leftColor, rightColor,
+                    obj.priority
+                );
+            }
+            break;
+        }
+        case RenderObject::Type::PLAYER: {
+            if (m_player) {
+                SDL_Color playerColor = m_player->getColor();
+
+                // Создаем оттенки для граней
+                SDL_Color leftColor = {
+                    static_cast<Uint8>(playerColor.r * 0.7f),
+                    static_cast<Uint8>(playerColor.g * 0.7f),
+                    static_cast<Uint8>(playerColor.b * 0.7f),
+                    playerColor.a
+                };
+                SDL_Color rightColor = {
+                    static_cast<Uint8>(playerColor.r * 0.5f),
+                    static_cast<Uint8>(playerColor.g * 0.5f),
+                    static_cast<Uint8>(playerColor.b * 0.5f),
+                    playerColor.a
+                };
+
+                m_tileRenderer->addVolumetricTile(
+                    playerFullX, playerFullY, m_player->getHeight(),
+                    nullptr, nullptr, nullptr,
+                    playerColor, leftColor, rightColor,
+                    obj.priority
+                );
+            }
+            break;
+        }
+        case RenderObject::Type::INTERACTIVE: {
+            auto& interactive = obj.interactiveObj;
+            if (interactive) {
+                SDL_Color color = interactive->getColor();
+
+                // Эффект парения для предметов
+                float height = obj.z;
+                if (auto pickupItem = std::dynamic_pointer_cast<PickupItem>(interactive)) {
+                    height += 0.15f * sinf(SDL_GetTicks() / 500.0f);
+                }
+
+                // Создаем оттенки для граней
+                SDL_Color leftColor = {
+                    static_cast<Uint8>(color.r * 0.7f),
+                    static_cast<Uint8>(color.g * 0.7f),
+                    static_cast<Uint8>(color.b * 0.7f),
+                    color.a
+                };
+                SDL_Color rightColor = {
+                    static_cast<Uint8>(color.r * 0.5f),
+                    static_cast<Uint8>(color.g * 0.5f),
+                    static_cast<Uint8>(color.b * 0.5f),
+                    color.a
+                };
+
+                m_tileRenderer->addVolumetricTile(
+                    obj.x, obj.y, height,
+                    nullptr, nullptr, nullptr,
+                    color, leftColor, rightColor,
+                    obj.priority
+                );
+            }
+            break;
+        }
+        }
+    }
+
+    // 9. Рендерим все тайлы в правильном порядке
     m_tileRenderer->render(renderer, centerX, centerY);
 }
 
@@ -761,4 +1052,282 @@ void MapScene::renderPlayer(SDL_Renderer* renderer, int centerX, int centerY, fl
         playerColor, playerLeftColor, playerRightColor,
         priority
     );
+}
+
+void MapScene::addInteractiveObject(std::shared_ptr<InteractiveObject> object) {
+    if (object) {
+        m_interactiveObjects.push_back(object);
+    }
+}
+
+void MapScene::removeInteractiveObject(std::shared_ptr<InteractiveObject> object) {
+    if (!object) return;
+
+    auto it = std::find(m_interactiveObjects.begin(), m_interactiveObjects.end(), object);
+    if (it != m_interactiveObjects.end()) {
+        m_interactiveObjects.erase(it);
+    }
+}
+
+std::shared_ptr<PickupItem> MapScene::createTestPickupItem(float x, float y, const std::string& name, PickupItem::ItemType type) {
+    // Создаем новый предмет для подбора
+    auto item = std::make_shared<PickupItem>(name, type);
+
+    // Устанавливаем позицию
+    item->setPosition(x, y, 0.2f); // Небольшая высота над землей
+
+    // Увеличим радиус взаимодействия для улучшения доступности
+    item->setInteractionRadius(1.8f);
+
+    // Инициализируем предмет
+    if (!item->initialize()) {
+        LOG_ERROR("Failed to initialize pickup item: " + name);
+        return nullptr;
+    }
+
+    // Добавляем предмет на сцену
+    addInteractiveObject(item);
+
+    LOG_INFO("Created pickup item: " + name + " at position (" + std::to_string(x) + ", " + std::to_string(y) + ")");
+    return item;
+}
+
+void MapScene::handleInteraction() {
+    if (!m_player) return;
+
+    float playerX = m_player->getFullX();
+    float playerY = m_player->getFullY();
+
+    std::shared_ptr<InteractiveObject> nearestObject = findNearestInteractiveObject(playerX, playerY);
+
+    if (nearestObject && nearestObject->isInteractable()) {
+        // Взаимодействуем с объектом
+        if (nearestObject->interact(m_player.get())) {
+            // Взаимодействие успешно
+            LOG_INFO("Interaction with " + nearestObject->getName() + " successful");
+
+            // Отображаем подсказку в течение короткого времени
+            m_showInteractionPrompt = true;
+            m_interactionPromptTimer = 0.0f;
+            m_interactionPrompt = "Picked up " + nearestObject->getName();
+        }
+    }
+    else {
+        LOG_INFO("No interactive objects in range");
+    }
+}
+
+
+std::shared_ptr<InteractiveObject> MapScene::findNearestInteractiveObject(float playerX, float playerY) {
+    std::shared_ptr<InteractiveObject> nearest = nullptr;
+    float minDistanceSquared = std::numeric_limits<float>::max();
+
+    for (auto& object : m_interactiveObjects) {
+        if (!object->isActive() || !object->isInteractable()) continue;
+
+        // Координаты объекта
+        float objectX = object->getPosition().x;
+        float objectY = object->getPosition().y;
+
+        // Вычисление расстояния до игрока
+        float dx = playerX - objectX;
+        float dy = playerY - objectY;
+        float distanceSquared = dx * dx + dy * dy;
+
+        // Получение радиуса взаимодействия объекта
+        float interactionRadius = object->getInteractionRadius();
+        float radiusSquared = interactionRadius * interactionRadius;
+
+        // Если объект находится в радиусе взаимодействия и ближе предыдущего
+        if (distanceSquared <= radiusSquared && distanceSquared < minDistanceSquared) {
+            minDistanceSquared = distanceSquared;
+            nearest = object;
+        }
+    }
+
+    return nearest;
+}
+
+void MapScene::renderInteractiveObjects(SDL_Renderer* renderer, int centerX, int centerY) {
+    for (auto& object : m_interactiveObjects) {
+        if (!object->isActive()) continue;
+
+        // Получаем данные объекта
+        float objectX = object->getPosition().x;
+        float objectY = object->getPosition().y;
+        float objectZ = object->getPosition().z;
+        SDL_Color color = object->getColor();
+
+        // Создаем визуальное представление объекта
+        // В зависимости от типа объекта, можно использовать разное отображение
+        // Здесь для примера используем объемный тайл для всех объектов
+
+        // Вычисляем приоритет для правильной Z-сортировки
+        float priority = calculateZOrderPriority(objectX, objectY, objectZ);
+
+        // Для предметов добавляем эффект парения
+        float height = objectZ;
+        if (auto pickupItem = std::dynamic_pointer_cast<PickupItem>(object)) {
+            // Если это предмет для подбора, добавляем эффект "парения"
+            height += 0.15f * sinf(SDL_GetTicks() / 500.0f); // Эффект парения
+        }
+
+        // Создаем цвета граней на основе основного цвета
+        SDL_Color leftColor = {
+            static_cast<Uint8>(color.r * 0.7f),
+            static_cast<Uint8>(color.g * 0.7f),
+            static_cast<Uint8>(color.b * 0.7f),
+            color.a
+        };
+
+        SDL_Color rightColor = {
+            static_cast<Uint8>(color.r * 0.5f),
+            static_cast<Uint8>(color.g * 0.5f),
+            static_cast<Uint8>(color.b * 0.5f),
+            color.a
+        };
+
+        // Добавляем объект в рендерер тайлов
+        m_tileRenderer->addVolumetricTile(
+            objectX, objectY, height,
+            nullptr, nullptr, nullptr,
+            color, leftColor, rightColor,
+            priority + 10.0f // Увеличенный приоритет, чтобы объекты отображались поверх тайлов
+        );
+    }
+}
+
+void MapScene::renderInteractionPrompt(SDL_Renderer* renderer) {
+    // В будущем здесь будет отрисовка подсказки для взаимодействия с помощью SDL_ttf
+    // Пока что просто отрисуем прямоугольник с текстом в консоли
+
+    // Получаем размеры окна
+    int windowWidth, windowHeight;
+    SDL_GetRendererOutputSize(renderer, &windowWidth, &windowHeight);
+
+    // Отрисовываем полупрозрачный прямоугольник внизу экрана
+    SDL_Rect promptRect = {
+        windowWidth / 2 - 150,
+        windowHeight - 50,
+        300,
+        40
+    };
+
+    // Устанавливаем цвет прямоугольника (полупрозрачный черный)
+    SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_BLEND);
+    SDL_SetRenderDrawColor(renderer, 0, 0, 0, 180);
+    SDL_RenderFillRect(renderer, &promptRect);
+
+    // Рисуем рамку
+    SDL_SetRenderDrawColor(renderer, 255, 255, 255, 255);
+    SDL_RenderDrawRect(renderer, &promptRect);
+
+    // Отображаем подсказку только при первом взаимодействии, а не каждый кадр
+    static std::string lastPrompt;
+    if (lastPrompt != m_interactionPrompt) {
+        lastPrompt = m_interactionPrompt;
+        LOG_INFO("Interaction prompt: " + m_interactionPrompt);
+    }
+}
+
+/**
+ * @brief Создает интерактивные предметы на карте
+ */
+void MapScene::createInteractiveItems() {
+    if (!m_tileMap || !m_player) return;
+
+    // Очищаем существующие объекты
+    m_interactiveObjects.clear();
+
+    // Используем случайный сид на основе текущего времени
+    std::srand(static_cast<unsigned int>(std::time(nullptr)));
+
+    // Параметры генерации предметов
+    int attempts = 0;
+    int maxAttempts = 100;      // Увеличиваем максимальное количество попыток
+    int itemsToPlace = 15;      // Увеличиваем количество предметов на карте
+    int itemsPlaced = 0;
+
+    // Минимальные и максимальные значения для расстояния от игрока
+    float minDistanceFromPlayer = 5.0f;
+    float maxDistanceFromPlayer = 20.0f;
+
+    // Текущая позиция игрока
+    float playerX = m_player->getPosition().x;
+    float playerY = m_player->getPosition().y;
+
+    // Хранение уже использованных позиций для предотвращения дублирования
+    std::set<std::pair<int, int>> usedPositions;
+
+    while (itemsPlaced < itemsToPlace && attempts < maxAttempts) {
+        // Выбираем случайную позицию на карте
+        int x = std::rand() % m_tileMap->getWidth();
+        int y = std::rand() % m_tileMap->getHeight();
+
+        // Проверяем расстояние до игрока, чтобы предметы не были слишком близко или слишком далеко
+        float distX = static_cast<float>(x) - playerX;
+        float distY = static_cast<float>(y) - playerY;
+        float distToPlayer = std::sqrt(distX * distX + distY * distY);
+
+        // Создаем пару для проверки уникальности позиции
+        std::pair<int, int> position(x, y);
+
+        // Проверяем, что тайл проходим, находится на подходящем расстоянии от игрока
+        // и эта позиция ещё не используется
+        if (m_tileMap->isValidCoordinate(x, y) &&
+            m_tileMap->isTileWalkable(x, y) &&
+            distToPlayer >= minDistanceFromPlayer &&
+            distToPlayer <= maxDistanceFromPlayer &&
+            usedPositions.find(position) == usedPositions.end()) {
+
+            // Запоминаем использованную позицию
+            usedPositions.insert(position);
+
+            // Выбираем случайный тип предмета
+            PickupItem::ItemType type = static_cast<PickupItem::ItemType>(std::rand() % 5);
+
+            // Создаем предмет с уникальным именем
+            std::string itemName;
+            switch (type) {
+            case PickupItem::ItemType::RESOURCE:
+                itemName = "Resource Fragment";
+                break;
+            case PickupItem::ItemType::WEAPON:
+                itemName = "Energy Weapon";
+                break;
+            case PickupItem::ItemType::ARMOR:
+                itemName = "Shield Module";
+                break;
+            case PickupItem::ItemType::CONSUMABLE:
+                itemName = "Health Kit";
+                break;
+            case PickupItem::ItemType::KEY:
+                itemName = "Access Card";
+                break;
+            default:
+                itemName = "Unknown Item";
+                break;
+            }
+
+            // Добавляем номер для уникальности
+            itemName += " #" + std::to_string(itemsPlaced + 1);
+
+            // Создаем предмет
+            auto item = createTestPickupItem(static_cast<float>(x), static_cast<float>(y), itemName, type);
+
+            // Устанавливаем увеличенный радиус взаимодействия для лучшей доступности
+            if (item) {
+                item->setInteractionRadius(2.0f);
+            }
+
+            itemsPlaced++;
+        }
+
+        attempts++;
+    }
+
+    // Добавляем информацию о покрытии карты предметами
+    float coverage = static_cast<float>(itemsPlaced) / (m_tileMap->getWidth() * m_tileMap->getHeight()) * 100.0f;
+    LOG_INFO("Created " + std::to_string(itemsPlaced) + " random items on the map (coverage: " +
+        std::to_string(coverage) + "%)");
 }
