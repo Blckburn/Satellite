@@ -1,6 +1,6 @@
 ﻿#include "TestScene.h"
-#include "Entity.h"
-#include "Engine.h"
+#include "Entity_old.h"
+#include "Engine_old.h"
 #include "ResourceManager.h"
 #include <iostream>
 #include <cmath>

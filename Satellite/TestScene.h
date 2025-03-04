@@ -1,6 +1,6 @@
 ﻿#pragma once
 
-#include "Scene.h"
+#include "Scene_old.h"
 #include "IsometricRenderer.h"
 #include "Camera.h"
 #include "TileRenderer.h"

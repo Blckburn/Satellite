@@ -1,9 +1,19 @@
-﻿#include "Engine.h"
-#include "Scene.h"
-#include "ResourceManager.h"
-#include <iostream>
+/**
+ * @file Engine.cpp
+ * @brief Реализация основного класса движка
+ */
+
+#include "Core/System/Engine.h"
+#include "Core/Base/Scene.h"
+#include "Core/System/Logger.h"
+
+// Временно включаем прямые заголовки SDL, 
+// в будущем их нужно будет изолировать в отдельных адаптерах
+#include <SDL.h>
 #include <SDL_image.h>
 #include <SDL_ttf.h>
+
+namespace Satellite {
 
 Engine::Engine(const std::string& title, int width, int height)
     : m_title(title), m_width(width), m_height(height), m_isRunning(false),
@@ -15,22 +25,26 @@ Engine::~Engine() {
 }
 
 bool Engine::initialize() {
+    // Инициализация логгера
+    Logger::getInstance().initialize(true, "satellite.log");
+    LogInfo("Initializing engine: " + m_title);
+
     // 1. Инициализация SDL
     if (SDL_Init(SDL_INIT_VIDEO) < 0) {
-        std::cerr << "SDL could not initialize! SDL Error: " << SDL_GetError() << std::endl;
+        LogError("SDL could not initialize! SDL Error: " + std::string(SDL_GetError()));
         return false;
     }
 
     // 2. Инициализация SDL_image
     int imgFlags = IMG_INIT_PNG;
     if (!(IMG_Init(imgFlags) & imgFlags)) {
-        std::cerr << "SDL_image could not initialize! SDL_image Error: " << IMG_GetError() << std::endl;
+        LogError("SDL_image could not initialize! SDL_image Error: " + std::string(IMG_GetError()));
         return false;
     }
 
     // 3. Инициализация SDL_ttf
     if (TTF_Init() < 0) {
-        std::cerr << "SDL_ttf could not initialize! SDL_ttf Error: " << TTF_GetError() << std::endl;
+        LogError("SDL_ttf could not initialize! SDL_ttf Error: " + std::string(TTF_GetError()));
         return false;
     }
 
@@ -44,7 +58,7 @@ bool Engine::initialize() {
     );
 
     if (!m_window) {
-        std::cerr << "Window could not be created! SDL Error: " << SDL_GetError() << std::endl;
+        LogError("Window could not be created! SDL Error: " + std::string(SDL_GetError()));
         return false;
     }
 
@@ -55,7 +69,7 @@ bool Engine::initialize() {
     );
 
     if (!m_renderer) {
-        std::cerr << "Renderer could not be created! SDL Error: " << SDL_GetError() << std::endl;
+        LogError("Renderer could not be created! SDL Error: " + std::string(SDL_GetError()));
         return false;
     }
 
@@ -63,24 +77,27 @@ bool Engine::initialize() {
     SDL_SetRenderDrawColor(m_renderer, 0, 0, 0, 255);
 
     // 7. Инициализация ResourceManager
-    m_resourceManager = std::make_shared<ResourceManager>(m_renderer);
-    if (!m_resourceManager) {
-        std::cerr << "Failed to create ResourceManager!" << std::endl;
-        return false;
-    }
+    // Примечание: временно закомментировано, так как ResourceManager будет перенесен в Systems
+    // m_resourceManager = std::make_shared<ResourceManager>(m_renderer);
+    // if (!m_resourceManager) {
+    //     LogError("Failed to create ResourceManager!");
+    //     return false;
+    // }
 
     m_isRunning = true;
     m_lastFrameTime = std::chrono::high_resolution_clock::now();
 
-    std::cout << "Engine initialized successfully" << std::endl;
+    LogInfo("Engine initialized successfully");
     return true;
 }
 
 void Engine::run() {
     if (!m_isRunning) {
-        std::cerr << "Engine not initialized or already stopped!" << std::endl;
+        LogError("Engine not initialized or already stopped!");
         return;
     }
+
+    LogInfo("Starting main game loop");
 
     // Основной игровой цикл
     while (m_isRunning) {
@@ -89,12 +106,16 @@ void Engine::run() {
         update();
         render();
     }
+
+    LogInfo("Main game loop ended");
 }
 
 void Engine::shutdown() {
+    LogInfo("Engine shutting down");
+
     // 1. Очистка ResourceManager
     if (m_resourceManager) {
-        m_resourceManager->clearAll();
+        // m_resourceManager->clearAll();
         m_resourceManager.reset();
     }
 
@@ -110,16 +131,17 @@ void Engine::shutdown() {
     }
 
     // 3. Завершение работы SDL_ttf, SDL_image и SDL
-    TTF_Quit();  // Завершение работы SDL_ttf
+    TTF_Quit();
     IMG_Quit();
     SDL_Quit();
 
     m_isRunning = false;
-    std::cout << "Engine shutdown completed" << std::endl;
+    LogInfo("Engine shutdown completed");
 }
 
 void Engine::setActiveScene(std::shared_ptr<Scene> scene) {
     m_activeScene = scene;
+    LogInfo("Active scene set to: " + scene->getName());
 }
 
 void Engine::processInput() {
@@ -151,34 +173,34 @@ void Engine::update() {
 }
 
 void Engine::render() {
-        // 1. Выбираем цвет фона в зависимости от текущего биома
-        switch (m_currentBiome) {
-        case 1: // FOREST
-            SDL_SetRenderDrawColor(m_renderer, 10, 20, 10, 255);
-            break;
-        case 2: // DESERT
-            SDL_SetRenderDrawColor(m_renderer, 20, 15, 10, 255);
-            break;
-        case 3: // TUNDRA
-            SDL_SetRenderDrawColor(m_renderer, 10, 15, 20, 255);
-            break;
-        case 4: // VOLCANIC
-            SDL_SetRenderDrawColor(m_renderer, 20, 10, 10, 255);
-            break;
-        default:
-            SDL_SetRenderDrawColor(m_renderer, 30, 45, 30, 255);
-            break;
-        }
+    // 1. Выбираем цвет фона в зависимости от текущего биома
+    switch (m_currentBiome) {
+    case 1: // FOREST
+        SDL_SetRenderDrawColor(m_renderer, 10, 20, 10, 255);
+        break;
+    case 2: // DESERT
+        SDL_SetRenderDrawColor(m_renderer, 20, 15, 10, 255);
+        break;
+    case 3: // TUNDRA
+        SDL_SetRenderDrawColor(m_renderer, 10, 15, 20, 255);
+        break;
+    case 4: // VOLCANIC
+        SDL_SetRenderDrawColor(m_renderer, 20, 10, 10, 255);
+        break;
+    default:
+        SDL_SetRenderDrawColor(m_renderer, 30, 45, 30, 255);
+        break;
+    }
 
-        SDL_RenderClear(m_renderer);
+    SDL_RenderClear(m_renderer);
 
-        // 2. Отрисовка активной сцены, если она существует
-        if (m_activeScene) {
-            m_activeScene->render(m_renderer);
-        }
+    // 2. Отрисовка активной сцены, если она существует
+    if (m_activeScene) {
+        m_activeScene->render(m_renderer);
+    }
 
-        // 3. Вывод отрисованного кадра на экран
-        SDL_RenderPresent(m_renderer);
+    // 3. Вывод отрисованного кадра на экран
+    SDL_RenderPresent(m_renderer);
 }
 
 void Engine::calculateDeltaTime() {
@@ -186,3 +208,5 @@ void Engine::calculateDeltaTime() {
     m_deltaTime = std::chrono::duration<float>(currentTime - m_lastFrameTime).count();
     m_lastFrameTime = currentTime;
 }
+
+} // namespace Satellite

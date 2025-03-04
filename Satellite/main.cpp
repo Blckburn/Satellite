@@ -1,16 +1,19 @@
-﻿#include "Engine.h"
+﻿#include "Core/System/Engine.h"
 #include "MapScene.h"
 #include <iostream>
 #include <memory>
+#include "Core/System/Logger.h"
 
 int main(int argc, char* argv[]) {
+    // Инициализация логгера
+    Satellite::Logger::getInstance().initialize(true, "satellite.log");
     // Для работы с консольными приложениями Windows
 #ifdef _WIN32
     SDL_SetMainReady();
 #endif
 
     // 1. Создание и инициализация движка
-    Engine engine("Satellite Engine - Tile System Demo", 800, 600);
+    Satellite::Engine engine("Satellite Engine - Tile System Demo", 800, 600);
 
     if (!engine.initialize()) {
         std::cerr << "Failed to initialize engine. Exiting..." << std::endl;

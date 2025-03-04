@@ -141,11 +141,20 @@
   <ItemGroup>
     <ClInclude Include="Camera.h" />
     <ClInclude Include="CollisionSystem.h" />
-    <ClInclude Include="Engine.h" />
-    <ClInclude Include="Entity.h" />
+    <ClInclude Include="Core\Base\Entity.h" />
+    <ClInclude Include="Core\Base\Scene.h" />
+    <ClInclude Include="Core\Base\Types.h" />
+    <ClInclude Include="Core\Core.h" />
+    <ClInclude Include="Core\Math\Vector2.h" />
+    <ClInclude Include="Core\System\Engine.h" />
+    <ClInclude Include="Core\System\Logger.h" />
+    <ClInclude Include="Core\Utils\MathUtils.h" />
+    <ClInclude Include="Core\Utils\StringUtils.h" />
+    <ClInclude Include="Engine_old.h" />
+    <ClInclude Include="Entity_old.h" />
     <ClInclude Include="InteractiveObject.h" />
     <ClInclude Include="IsometricRenderer.h" />
-    <ClInclude Include="Logger.h" />
+    <ClInclude Include="Logger_old.h" />
     <ClInclude Include="MapScene.h" />
     <ClInclude Include="MapTile.h" />
     <ClInclude Include="PickupItem.h" />
@@ -154,7 +163,7 @@
     <ClInclude Include="ResourceManager.h" />
     <ClInclude Include="RoomGenerator.h" />
     <ClInclude Include="Satellite.h" />
-    <ClInclude Include="Scene.h" />
+    <ClInclude Include="Scene_old.h" />
     <ClInclude Include="TestScene.h" />
     <ClInclude Include="TileMap.h" />
     <ClInclude Include="TileRenderer.h" />
@@ -163,8 +172,12 @@
   <ItemGroup>
     <ClCompile Include="Camera.cpp" />
     <ClCompile Include="CollisionSystem.cpp" />
-    <ClCompile Include="Engine.cpp" />
-    <ClCompile Include="Entity.cpp" />
+    <ClCompile Include="Core\Base\Entity.cpp" />
+    <ClCompile Include="Core\Base\Scene.cpp" />
+    <ClCompile Include="Core\System\Engine.cpp" />
+    <ClCompile Include="Core\System\Logger.cpp" />
+    <ClCompile Include="Engine_old.cpp" />
+    <ClCompile Include="Entity_old.cpp" />
     <ClCompile Include="InteractiveObject.cpp" />
     <ClCompile Include="IsometricRenderer.cpp" />
     <ClCompile Include="main.cpp" />

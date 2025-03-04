@@ -1,12 +1,12 @@
 ﻿#include "MapScene.h"
-#include "Engine.h"
+#include "Engine_old.h"
 #include "ResourceManager.h"
 #include "CollisionSystem.h" 
 #include "Player.h"
 #include <iostream>
 #include <cmath>
 #include "RoomGenerator.h"
-#include "Logger.h"
+#include "Logger_old.h"
 #include <set>
 
 MapScene::MapScene(const std::string& name, Engine* engine)

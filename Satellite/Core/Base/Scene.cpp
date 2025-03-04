@@ -1,14 +1,21 @@
-﻿#include "Scene_old.h"
-#include "Entity_old.h"
+/**
+ * @file Scene.cpp
+ * @brief Реализация базового класса для игровых сцен
+ */
+
+#include "Core/Base/Scene.h"
+#include "Core/Base/Entity.h"
+#include "Core/System/Logger.h"
 #include <algorithm>
-#include <iostream>
+
+namespace Satellite {
 
 Scene::Scene(const std::string& name) : m_name(name) {
-    std::cout << "Creating scene: " << name << std::endl;
+    LogInfo("Creating scene: " + name);
 }
 
 Scene::~Scene() {
-    std::cout << "Destroying scene: " << m_name << std::endl;
+    LogInfo("Destroying scene: " + m_name);
     m_entities.clear();
 }
 
@@ -54,3 +61,5 @@ void Scene::removeEntity(std::shared_ptr<Entity> entity) {
         m_entities.end()
     );
 }
+
+} // namespace Satellite

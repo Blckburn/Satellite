@@ -2,7 +2,7 @@
 #include "Player.h"
 #include <cmath>
 #include <iostream>
-#include "Logger.h"
+#include "Logger_old.h"
 
 InteractiveObject::InteractiveObject(const std::string& name, InteractiveType type)
     : Entity(name), m_interactiveType(type),

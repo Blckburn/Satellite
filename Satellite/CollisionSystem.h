@@ -1,6 +1,6 @@
 ﻿#pragma once
 
-#include "Entity.h"
+#include "Entity_old.h"
 #include "TileMap.h"
 #include <vector>
 #include <memory>

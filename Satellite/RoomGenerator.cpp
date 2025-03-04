@@ -2,7 +2,7 @@
 #include <random>
 #include <algorithm>
 #include <ctime>
-#include "Logger.h"
+#include "Logger_old.h"
 
 RoomGenerator::RoomGenerator(unsigned int seed)
     : m_seed(seed), m_maxRoomSize(15), m_minRoomSize(7), m_maxCorridorLength(5),

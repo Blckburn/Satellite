@@ -2,7 +2,7 @@
 #include "Player.h"
 #include <cmath>
 #include <iostream>
-#include "Logger.h"
+#include "Logger_old.h"
 
 PickupItem::PickupItem(const std::string& name, ItemType itemType)
     : InteractiveObject(name, InteractiveType::PICKUP),
