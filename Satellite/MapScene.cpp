@@ -1138,12 +1138,26 @@ void MapScene::renderWithBlockSorting(SDL_Renderer* renderer, int centerX, int c
                     SDL_Color topColor = color;
 
                     // Верхняя часть с ярким цветом ("экран" терминала)
-                    SDL_Color screenColor = {
-                        static_cast<Uint8>(std::min(255, color.r + 50)),
-                        static_cast<Uint8>(std::min(255, color.g + 50)),
-                        static_cast<Uint8>(std::min(255, color.b + 50)),
-                        color.a
-                    };
+                    SDL_Color screenColor;
+                    if (terminalObj->shouldShowIndicator()) {
+                        // Для непрочитанных терминалов делаем намного ярче с пульсацией
+                        float pulseEffect = 0.3f * sinf(SDL_GetTicks() / 150.0f); // Более быстрая и заметная пульсация
+                        screenColor = {
+                            static_cast<Uint8>(std::min(255, color.r + 100)),
+                            static_cast<Uint8>(std::min(255, color.g + 100)),
+                            static_cast<Uint8>(std::min(255, color.b + 100)),
+                            255 // Полная непрозрачность
+                        };
+                    }
+                    else {
+                        // Для уже прочитанных - стандартная яркость
+                        screenColor = {
+                            static_cast<Uint8>(std::min(255, color.r + 50)),
+                            static_cast<Uint8>(std::min(255, color.g + 50)),
+                            static_cast<Uint8>(std::min(255, color.b + 50)),
+                            color.a
+                        };
+                    }
 
                     // Боковые части (корпус) темнее
                     SDL_Color leftColor = {
@@ -1161,7 +1175,15 @@ void MapScene::renderWithBlockSorting(SDL_Renderer* renderer, int centerX, int c
                     };
 
                     // Добавляем плавающий эффект и пульсацию для терминалов
-                    float pulseEffect = 0.1f * sinf(SDL_GetTicks() / 200.0f);
+                    float pulseEffect;
+                    if (terminalObj->shouldShowIndicator()) {
+                        // Более заметная пульсация для непрочитанных терминалов
+                        pulseEffect = 0.3f * sinf(SDL_GetTicks() / 150.0f);
+                    }
+                    else {
+                        // Обычная пульсация для прочитанных терминалов
+                        pulseEffect = 0.1f * sinf(SDL_GetTicks() / 200.0f);
+                    }
 
                     // Основная база терминала (нижняя часть)
                     m_tileRenderer->addVolumetricTile(
@@ -1181,161 +1203,7 @@ void MapScene::renderWithBlockSorting(SDL_Renderer* renderer, int centerX, int c
 
                     // Отображаем индикатор над терминалом, если он еще не прочитан
                     if (terminalObj->shouldShowIndicator()) {
-                        // Определяем текущее время для анимаций
-                        Uint32 ticks = SDL_GetTicks();
-                        float currentTime = ticks / 1000.0f;
-
-                        // Определяем позицию для символа (немного выше терминала)
-                        float symbolX = obj.x;
-                        float symbolY = obj.y;
-                        float symbolZ = height + 0.5f;
-
-                        // Эффекты анимации - более выраженные
-                        float hoverEffect = 0.2f * sinf(currentTime * 2.0f);
-                        float rotationAngle = ticks % 3600 / 10.0f; // Вращение на 360 градусов каждые 10 секунд
-
-                        // Яркие пульсирующие цвета в зависимости от типа терминала
-                        SDL_Color baseColor;
-                        switch (terminalObj->getTerminalType()) {
-                        case Terminal::TerminalType::RESEARCH_SENSOR:
-                            baseColor = { 0, 255, 255, 255 }; // Яркий бирюзовый
-                            break;
-                        case Terminal::TerminalType::ANCIENT_CONSOLE:
-                            baseColor = { 255, 100, 255, 255 }; // Яркий фиолетовый
-                            break;
-                        case Terminal::TerminalType::EMERGENCY_BEACON:
-                            baseColor = { 255, 165, 0, 255 }; // Яркий оранжевый
-                            break;
-                        case Terminal::TerminalType::SCIENCE_STATION:
-                            baseColor = { 40, 170, 255, 255 }; // Яркий синий
-                            break;
-                        default:
-                            baseColor = { 255, 255, 255, 255 }; // Белый
-                        }
-
-                        // Пульсация цвета - более интенсивная
-                        float pulseFactor = 0.5f + 0.5f * sinf(currentTime * 4.0f);
-                        SDL_Color glowColor = {
-                            static_cast<Uint8>(baseColor.r),
-                            static_cast<Uint8>(baseColor.g),
-                            static_cast<Uint8>(baseColor.b),
-                            static_cast<Uint8>(180 + 75 * pulseFactor)
-                        };
-
-                        // Более яркий внешний ореол свечения
-                        SDL_Color outerGlowColor = {
-                            static_cast<Uint8>(baseColor.r * 0.7f),
-                            static_cast<Uint8>(baseColor.g * 0.7f),
-                            static_cast<Uint8>(baseColor.b * 0.7f),
-                            100 // Полупрозрачный
-                        };
-
-                        // Рисуем базовый куб - более крупный, полупрозрачный ореол свечения
-                        m_tileRenderer->addVolumetricTile(
-                            symbolX, symbolY, symbolZ + hoverEffect - 0.1f,
-                            nullptr, nullptr, nullptr,
-                            outerGlowColor, outerGlowColor, outerGlowColor,
-                            obj.priority + 10.0f
-                        );
-
-                        // Внутренний кубик - интенсивное свечение
-                        m_tileRenderer->addVolumetricTile(
-                            symbolX, symbolY, symbolZ + hoverEffect,
-                            nullptr, nullptr, nullptr,
-                            glowColor,
-                            {
-                                static_cast<Uint8>(glowColor.r * 0.8f),
-                                static_cast<Uint8>(glowColor.g * 0.8f),
-                                static_cast<Uint8>(glowColor.b * 0.8f),
-                                glowColor.a
-                            },
-        {
-            static_cast<Uint8>(glowColor.r * 0.7f),
-            static_cast<Uint8>(glowColor.g * 0.7f),
-            static_cast<Uint8>(glowColor.b * 0.7f),
-            glowColor.a
-        },
-                            obj.priority + 11.0f
-                        );
-
-                        // Рисуем символ в центре кубика
-                        std::string symbolStr = terminalObj->getIndicatorSymbol();
-
-                        // Преобразуем координаты в экранные с учетом эффекта парения
-                        int screenX, screenY;
-                        m_isoRenderer->worldToScreen(symbolX, symbolY, screenX, screenY);
-
-                        // Применяем преобразования камеры
-                        float cameraZoom = m_camera->getZoom();
-                        float cameraX = m_camera->getX();
-                        float cameraY = m_camera->getY();
-
-                        screenX = centerX + static_cast<int>((screenX - cameraX) * cameraZoom);
-                        const float HEIGHT_SCALE = 30.0f; // Масштаб для высоты в изометрии
-                        screenY = centerY + static_cast<int>((screenY - m_camera->getY() - (symbolZ + hoverEffect) * HEIGHT_SCALE) * m_camera->getZoom());
-
-                        // Рисуем символ с помощью SDL_ttf
-                        TTF_Font* font = m_engine->getResourceManager()->getFont("default");
-                        if (font) {
-                            // Создаем очень яркую поверхность для символа - чисто белую
-                            SDL_Surface* symbolSurface = TTF_RenderText_Blended(font, symbolStr.c_str(), { 255, 255, 255, 255 });
-                            if (symbolSurface) {
-                                SDL_Texture* symbolTexture = SDL_CreateTextureFromSurface(renderer, symbolSurface);
-                                if (symbolTexture) {
-                                    // Увеличиваем размер для лучшей видимости
-                                    int symbolSize = static_cast<int>(symbolSurface->h * 2.0f * cameraZoom);
-
-                                    // Настройка прямоугольника для отображения с учетом вращения
-                                    SDL_Rect symbolRect = {
-                                        screenX - symbolSize / 2,
-                                        screenY - symbolSize - 10, // Поднимаем чуть выше
-                                        symbolSize,
-                                        symbolSize
-                                    };
-
-                                    // Устанавливаем альфа-смешивание для эффекта свечения
-                                    SDL_SetTextureBlendMode(symbolTexture, SDL_BLENDMODE_ADD);
-
-                                    // Создаем центр вращения
-                                    SDL_Point center = { symbolSize / 2, symbolSize / 2 };
-
-                                    // Рисуем символ с вращением
-                                    SDL_RenderCopyEx(
-                                        renderer,
-                                        symbolTexture,
-                                        NULL,
-                                        &symbolRect,
-                                        rotationAngle, // Угол вращения
-                                        &center,        // Центр вращения
-                                        SDL_FLIP_NONE   // Без отражения
-                                    );
-
-                                    // Рисуем еще один символ с небольшим смещением для эффекта свечения
-                                    symbolRect.x -= 1;
-                                    symbolRect.y -= 1;
-                                    symbolRect.w += 2;
-                                    symbolRect.h += 2;
-
-                                    // Устанавливаем смешивание и прозрачность
-                                    SDL_SetTextureAlphaMod(symbolTexture, 150);
-
-                                    // Рисуем второй слой символа в противоположном направлении для эффекта свечения
-                                    SDL_RenderCopyEx(
-                                        renderer,
-                                        symbolTexture,
-                                        NULL,
-                                        &symbolRect,
-                                        -rotationAngle, // Противоположное вращение
-                                        &center,
-                                        SDL_FLIP_NONE
-                                    );
-
-                                    // Освобождаем ресурсы
-                                    SDL_DestroyTexture(symbolTexture);
-                                }
-                                SDL_FreeSurface(symbolSurface);
-                            }
-                        }
+                        // Индикаторы символами отключены - используем только эффекты на самом терминале
                     }
                 }
                 else if (auto pickupItem = std::dynamic_pointer_cast<PickupItem>(interactive)) {
@@ -2666,25 +2534,30 @@ void MapScene::createTerminals() {
                     // Добавляем контент в зависимости от биома
                     switch (m_currentBiome) {
                     case 1: // FOREST
-                        terminal->addEntry("Flora Analysis", "Dense vegetation indicates unusually accelerated growth cycles. Oxygen levels 28% above baseline.");
-                        terminal->addEntry("Warning", "Detected trace elements of unknown mutagenic compound in soil samples.");
+                        terminal->addEntry("Flora Analysis", "Plant growth rate exceeds natural parameters by 315%. Detected rapid cellular division with unknown catalyst. Species demonstrate enhanced regeneration and resistance to environmental stressors.");
+                        terminal->addEntry("Warning", "Presence of unidentified mutagenic compound in soil samples. Exposure may lead to genetic alterations. Field team advised to maintain sealed environment protocols at all times.");
+                        terminal->addEntry("Research Notes", "Three specimens collected show signs of rudimentary neural networks forming between separate plants. Recommend immediate containment and priority study of interspecies communication patterns.");
                         break;
                     case 2: // DESERT
-                        terminal->addEntry("Mineral Survey", "High concentration of rare-earth elements detected in subsurface layers.");
-                        terminal->addEntry("Climate Data", "Nocturnal temperature variations exceed expected parameters by 200%.");
+                        terminal->addEntry("Mineral Survey", "Discovered lattice structures of crystallized minerals with semiconductor properties. Material exhibits energy absorption and storage capabilities beyond known physics. Potentially revolutionary for power systems.");
+                        terminal->addEntry("Climate Analysis", "Nocturnal temperature inversions create localized atmospheric distortions. Thermal imaging reveals geometric cooling patterns inconsistent with natural phenomena. Possible evidence of climate engineering.");
+                        terminal->addEntry("Excavation Log", "Uncovered metallic structure at 15m depth. Carbon dating impossible - material rejects all standard dating methods. Geometry suggests artificial origin. Requested specialized equipment for further study.");
                         break;
                     case 3: // TUNDRA
-                        terminal->addEntry("Ice Core Sample", "Crystalline structures contain unknown bacterial microorganisms in suspended animation.");
-                        terminal->addEntry("Seismic Activity", "Regular harmonic patterns detected in deep-layer permafrost.");
+                        terminal->addEntry("Ice Core Analysis", "Ice samples contain microscopic organisms in suspended animation. DNA sequencing reveals no match to Earth taxonomy. Organisms appear viable when subjected to controlled warming under laboratory conditions.");
+                        terminal->addEntry("Seismic Monitoring", "Deep-scan detects regular pulsations from beneath permafrost layer. Pattern suggests artificial origin rather than geological processes. Frequency matches no known tectonic activity profile.");
+                        terminal->addEntry("Expedition Log", "Team reports auditory anomalies near northern glacier - described as \"whispers\" that intensify at night. Two researchers experienced identical dreams. Recommending psychological evaluation and audio monitoring.");
                         break;
                     case 4: // VOLCANIC
-                        terminal->addEntry("Thermal Analysis", "Magma composition indicates artificial manipulation of geological processes.");
-                        terminal->addEntry("Atmospheric Alert", "Toxic gas emissions follow predictable patterns suggesting controlled release.");
+                        terminal->addEntry("Thermal Analysis", "Magma composition contains engineered nanoparticles with thermal regulatory properties. Evidence suggests deliberate temperature control of volcanic activity. Technology far exceeds current capabilities.");
+                        terminal->addEntry("Atmospheric Reading", "Gas emissions contain trace elements arranged in mathematical sequences. Analysis confirms non-random distribution impossible in natural formation. Pattern resembles encrypted data transmission.");
+                        terminal->addEntry("Security Alert", "Motion sensors detected synchronized movement patterns within lava tubes. Thermal signatures suggest technological origin. Unable to establish visual confirmation due to extreme temperatures.");
                         break;
                     }
 
-                    // Добавляем общую запись для всех терминалов
-                    terminal->addEntry("Encrypted Message", "Signal detected from coordinates [REDACTED]. Message: 'Project Satellite compromised. Evacuate immediately.'");
+                    // Добавляем общую запись для всех терминалов - короткую и важную
+                    terminal->addEntry("Encrypted Message", "PRIORITY ALPHA: Project Satellite compromised. Unknown entity has gained access to core systems. Disconnect all terminals. Initiate emergency protocol ECHO-7 immediately.");
+
 
                     terminalPlaced = true;
                     LOG_INFO("Terminal placed in room corner at position (" + std::to_string(x) + ", " + std::to_string(y) + ")");
@@ -2873,33 +2746,102 @@ void MapScene::renderTerminalInfo(SDL_Renderer* renderer) {
         TTF_Font* font = m_engine->getResourceManager()->getFont("default");
         if (!font) return;
 
-        // Цвет текста и фона в зависимости от типа терминала
-        SDL_Color textColor = { 255, 255, 255, 255 }; // По умолчанию белый
-        SDL_Color bgColor = { 0, 0, 0, 220 }; // По умолчанию прозрачно-черный
+        // Эффект "компрометации системы" - кратковременное появление предупреждения
+        // Каждые 3 секунды на 0.8 секунд появляется предупреждение
+        Uint32 currentTime = SDL_GetTicks();
+        bool showCompromisedMessage = (currentTime % 3800) < 800; // 0.8 секунды каждые 3.8 секунды
 
-        // Настройка цветов в зависимости от типа терминала
-        switch (m_currentInteractingTerminal->getTerminalType()) {
-        case Terminal::TerminalType::RESEARCH_SENSOR:
-            textColor = { 220, 255, 255, 255 }; // Светло-бирюзовый
-            bgColor = { 0, 45, 45, 220 }; // Темно-бирюзовый фон
-            break;
-        case Terminal::TerminalType::ANCIENT_CONSOLE:
-            textColor = { 230, 200, 255, 255 }; // Светло-фиолетовый
-            bgColor = { 40, 0, 60, 220 }; // Темно-фиолетовый фон
-            break;
-        case Terminal::TerminalType::EMERGENCY_BEACON:
-            textColor = { 255, 220, 180, 255 }; // Светло-оранжевый
-            bgColor = { 60, 20, 0, 220 }; // Темно-оранжевый фон
-            break;
-        case Terminal::TerminalType::SCIENCE_STATION:
-            textColor = { 180, 220, 255, 255 }; // Светло-синий
-            bgColor = { 0, 30, 60, 220 }; // Темно-синий фон
-            break;
+        // Получаем записи терминала
+        const auto& entries = m_currentInteractingTerminal->getEntries();
+
+        // Проверяем наличие записей
+        if (entries.size() < 2) return;
+
+        // Определяем, какую запись показывать
+        int selectedIndex = -1;
+
+        // Инициализируем индекс при первом вызове
+        if (m_currentInteractingTerminal->getSelectedEntryIndex() < 0) {
+            // Пропускаем первую запись, если она совпадает с названием терминала
+            int startIndex = (entries[0].first == m_currentInteractingTerminal->getName()) ? 1 : 0;
+
+            // Для выбора используем только содержательные записи, исключая предупреждение (последняя запись)
+            int endIndex = entries.size() - 1;
+
+            if (startIndex < endIndex) {
+                // Генерируем случайный индекс для интересных записей
+                selectedIndex = startIndex + rand() % (endIndex - startIndex);
+                // Сохраняем выбранный индекс
+                m_currentInteractingTerminal->setSelectedEntryIndex(selectedIndex);
+            }
+            else {
+                // Если нет других записей, используем первую
+                selectedIndex = startIndex;
+                m_currentInteractingTerminal->setSelectedEntryIndex(selectedIndex);
+            }
+        }
+        else {
+            // Используем ранее выбранный индекс
+            selectedIndex = m_currentInteractingTerminal->getSelectedEntryIndex();
         }
 
-        // Ширина и высота информационного окна - уменьшаем высоту, так как отображаем только одну запись
+        // Определяем текущий контент и заголовок
+        std::string headerText;
+        std::string contentText;
+        SDL_Color textColor;
+        SDL_Color bgColor;
+
+        if (showCompromisedMessage && entries.size() > 0) {
+            // Показываем предупреждение о компрометации (используем последнюю запись)
+            size_t warningIndex = entries.size() - 1;
+            headerText = entries[warningIndex].first;
+            contentText = entries[warningIndex].second;
+
+            // Яркий красный цвет для предупреждения
+            textColor = { 255, 70, 70, 255 };
+
+            // Темный фон с красным оттенком
+            bgColor = { 40, 0, 0, 220 };
+        }
+        else if (selectedIndex >= 0 && selectedIndex < entries.size()) {
+            // Показываем выбранную запись в обычном цвете
+            headerText = entries[selectedIndex].first;
+            contentText = entries[selectedIndex].second;
+
+            // Определяем цвет в зависимости от типа терминала
+            switch (m_currentInteractingTerminal->getTerminalType()) {
+            case Terminal::TerminalType::RESEARCH_SENSOR:
+                textColor = { 220, 255, 255, 255 }; // Светло-бирюзовый
+                bgColor = { 0, 45, 45, 220 }; // Темно-бирюзовый фон
+                break;
+            case Terminal::TerminalType::ANCIENT_CONSOLE:
+                textColor = { 230, 200, 255, 255 }; // Светло-фиолетовый
+                bgColor = { 40, 0, 60, 220 }; // Темно-фиолетовый фон
+                break;
+            case Terminal::TerminalType::EMERGENCY_BEACON:
+                textColor = { 255, 220, 180, 255 }; // Светло-оранжевый
+                bgColor = { 60, 20, 0, 220 }; // Темно-оранжевый фон
+                break;
+            case Terminal::TerminalType::SCIENCE_STATION:
+                textColor = { 180, 220, 255, 255 }; // Светло-синий
+                bgColor = { 0, 30, 60, 220 }; // Темно-синий фон
+                break;
+            default:
+                textColor = { 255, 255, 255, 255 }; // Белый
+                bgColor = { 0, 0, 0, 220 }; // Черный фон
+            }
+        }
+        else {
+            // Если нет подходящих записей, показываем стандартный текст
+            headerText = m_currentInteractingTerminal->getName();
+            contentText = "No data available.";
+            textColor = { 255, 255, 255, 255 }; // Белый
+            bgColor = { 0, 0, 0, 220 }; // Черный фон
+        }
+
+        // Ширина и высота информационного окна
         int infoWidth = windowWidth / 2 + 100;
-        int infoHeight = windowHeight / 4 + 50; // Уменьшенная высота для одной записи
+        int infoHeight = windowHeight / 2 + 50;
 
         // Отрисовываем полупрозрачный прямоугольник для фона
         SDL_Rect infoRect = {
@@ -2915,16 +2857,19 @@ void MapScene::renderTerminalInfo(SDL_Renderer* renderer) {
         SDL_RenderFillRect(renderer, &infoRect);
 
         // Рисуем рамку для окна терминала
-        SDL_SetRenderDrawColor(renderer, textColor.r, textColor.g, textColor.b, 180);
+        // Для предупреждения рисуем красную рамку
+        if (showCompromisedMessage) {
+            SDL_SetRenderDrawColor(renderer, 255, 70, 70, 200);
+        }
+        else {
+            SDL_SetRenderDrawColor(renderer, textColor.r, textColor.g, textColor.b, 180);
+        }
         SDL_RenderDrawRect(renderer, &infoRect);
 
-        // Получаем записи терминала
-        const auto& entries = m_currentInteractingTerminal->getEntries();
-
-        // Отображаем название терминала вверху
+        // Отображаем название терминала вверху (всегда)
         std::string terminalTitle = m_currentInteractingTerminal->getName();
 
-        // Рисуем заголовок (всегда)
+        // Рисуем заголовок
         SDL_Surface* titleSurface = TTF_RenderText_Blended(font, terminalTitle.c_str(), textColor);
         if (titleSurface) {
             SDL_Texture* titleTexture = SDL_CreateTextureFromSurface(renderer, titleSurface);
@@ -2957,92 +2902,78 @@ void MapScene::renderTerminalInfo(SDL_Renderer* renderer) {
         // Вертикальное смещение
         int yOffset = 80;
 
-        // Пропускаем первую запись, если ее заголовок совпадает с именем терминала
-        int startIndex = 0;
-        if (!entries.empty() && entries[0].first == terminalTitle) {
-            startIndex = 1;
+        // Отображаем заголовок записи
+        SDL_Surface* headerSurface = TTF_RenderText_Blended(font, headerText.c_str(), textColor);
+        if (headerSurface) {
+            SDL_Texture* headerTexture = SDL_CreateTextureFromSurface(renderer, headerSurface);
+            if (headerTexture) {
+                SDL_Rect headerRect;
+                headerRect.w = headerSurface->w;
+                headerRect.h = headerSurface->h;
+                headerRect.x = infoRect.x + 40;
+                headerRect.y = infoRect.y + yOffset;
+
+                SDL_RenderCopy(renderer, headerTexture, NULL, &headerRect);
+                SDL_DestroyTexture(headerTexture);
+            }
+            SDL_FreeSurface(headerSurface);
         }
 
-        // Отображаем только одну запись
-        if (startIndex < entries.size()) {
-            size_t i = startIndex;
+        // Создаем цвет для содержимого (немного прозрачнее)
+        SDL_Color contentColor = { textColor.r, textColor.g, textColor.b, 200 };
 
-            // Отображаем заголовок записи
-            SDL_Surface* headerSurface = TTF_RenderText_Blended(font, entries[i].first.c_str(), textColor);
-            if (headerSurface) {
-                SDL_Texture* headerTexture = SDL_CreateTextureFromSurface(renderer, headerSurface);
-                if (headerTexture) {
-                    SDL_Rect headerRect;
-                    headerRect.w = headerSurface->w;
-                    headerRect.h = headerSurface->h;
-                    headerRect.x = infoRect.x + 40;
-                    headerRect.y = infoRect.y + yOffset;
+        // Разбиваем текст на строки, чтобы поместить их в окно
+        std::vector<std::string> lines;
 
-                    SDL_RenderCopy(renderer, headerTexture, NULL, &headerRect);
-                    SDL_DestroyTexture(headerTexture);
-                }
-                SDL_FreeSurface(headerSurface);
+        // Разделяем текст на строки максимум по 40-45 символов
+        int maxLineLength = 40;
+
+        int startPos = 0;
+        while (startPos < contentText.length()) {
+            int endPos = startPos + maxLineLength;
+            if (endPos >= contentText.length()) {
+                // Если это конец текста, добавляем оставшуюся часть
+                lines.push_back(contentText.substr(startPos));
+                break;
             }
 
-            // Определяем содержимое и подготавливаем для разделения на строки
-            std::string content = entries[i].second;
-
-            // Создаем цвет для содержимого (немного прозрачнее)
-            SDL_Color contentColor = { textColor.r, textColor.g, textColor.b, 200 };
-
-            // Разбиваем текст на строки, чтобы поместить их в окно
-            std::vector<std::string> lines;
-
-            // Разделяем текст на строки максимум по 40-45 символов
-            int maxLineLength = 40;
-
-            int startPos = 0;
-            while (startPos < content.length()) {
-                int endPos = startPos + maxLineLength;
-                if (endPos >= content.length()) {
-                    // Если это конец текста, добавляем оставшуюся часть
-                    lines.push_back(content.substr(startPos));
-                    break;
-                }
-
-                // Находим последний пробел перед endPos
-                int lastSpace = content.rfind(' ', endPos);
-                if (lastSpace > startPos) {
-                    // Если есть пробел, разбиваем по нему
-                    lines.push_back(content.substr(startPos, lastSpace - startPos));
-                    startPos = lastSpace + 1;
-                }
-                else {
-                    // Если пробела нет, просто разбиваем по maxLineLength
-                    lines.push_back(content.substr(startPos, maxLineLength));
-                    startPos += maxLineLength;
-                }
+            // Находим последний пробел перед endPos
+            int lastSpace = contentText.rfind(' ', endPos);
+            if (lastSpace > startPos) {
+                // Если есть пробел, разбиваем по нему
+                lines.push_back(contentText.substr(startPos, lastSpace - startPos));
+                startPos = lastSpace + 1;
             }
-
-            // Отображаем каждую строку содержимого
-            int lineOffset = 30; // Начальное смещение от заголовка
-            for (const auto& line : lines) {
-                SDL_Surface* lineSurface = TTF_RenderText_Blended(font, line.c_str(), contentColor);
-                if (lineSurface) {
-                    SDL_Texture* lineTexture = SDL_CreateTextureFromSurface(renderer, lineSurface);
-                    if (lineTexture) {
-                        SDL_Rect lineRect;
-                        lineRect.w = lineSurface->w;
-                        lineRect.h = lineSurface->h;
-                        lineRect.x = infoRect.x + 45; // Небольшой отступ от края
-                        lineRect.y = infoRect.y + yOffset + lineOffset;
-
-                        SDL_RenderCopy(renderer, lineTexture, NULL, &lineRect);
-                        SDL_DestroyTexture(lineTexture);
-                    }
-                    SDL_FreeSurface(lineSurface);
-                }
-
-                lineOffset += 25; // Переходим к следующей строке
+            else {
+                // Если пробела нет, просто разбиваем по maxLineLength
+                lines.push_back(contentText.substr(startPos, maxLineLength));
+                startPos += maxLineLength;
             }
         }
 
-        // Добавляем подсказку для закрытия внизу (только E)
+        // Отображаем каждую строку содержимого
+        int lineOffset = 30; // Начальное смещение от заголовка
+        for (const auto& line : lines) {
+            SDL_Surface* lineSurface = TTF_RenderText_Blended(font, line.c_str(), contentColor);
+            if (lineSurface) {
+                SDL_Texture* lineTexture = SDL_CreateTextureFromSurface(renderer, lineSurface);
+                if (lineTexture) {
+                    SDL_Rect lineRect;
+                    lineRect.w = lineSurface->w;
+                    lineRect.h = lineSurface->h;
+                    lineRect.x = infoRect.x + 45; // Небольшой отступ от края
+                    lineRect.y = infoRect.y + yOffset + lineOffset;
+
+                    SDL_RenderCopy(renderer, lineTexture, NULL, &lineRect);
+                    SDL_DestroyTexture(lineTexture);
+                }
+                SDL_FreeSurface(lineSurface);
+            }
+
+            lineOffset += 25; // Переходим к следующей строке
+        }
+
+        // Добавляем подсказку для закрытия внизу
         SDL_Surface* promptSurface = TTF_RenderText_Blended(font, "Press E to close",
             { textColor.r, textColor.g, textColor.b, 180 });
         if (promptSurface) {
@@ -3063,14 +2994,5 @@ void MapScene::renderTerminalInfo(SDL_Renderer* renderer) {
     else {
         // Если шрифты недоступны, просто выводим в лог
         LOG_INFO("Terminal info display: " + m_currentInteractingTerminal->getName());
-
-        const auto& entries = m_currentInteractingTerminal->getEntries();
-        if (!entries.empty()) {
-            size_t index = 0;
-            if (entries[0].first == m_currentInteractingTerminal->getName() && entries.size() > 1) {
-                index = 1;
-            }
-            LOG_INFO("- " + entries[index].first + ": " + entries[index].second);
-        }
     }
 }

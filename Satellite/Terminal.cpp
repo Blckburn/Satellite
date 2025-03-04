@@ -69,6 +69,8 @@ bool Terminal::initialize() {
         break;
     }
 
+    selectRandomEntry();
+
     LOG_INFO("Terminal initialized: " + getName() + " (Type: " + std::to_string(static_cast<int>(m_terminalType)) + ")");
     return true;
 }
@@ -167,5 +169,34 @@ std::string Terminal::getIndicatorSymbol() const {
         return "+";  // Плюс для научной станции
     default:
         return "?";  // По умолчанию знак вопроса
+    }
+}
+
+void Terminal::selectRandomEntry() {
+    // Если записей нет, нечего выбирать
+    if (m_entries.empty()) {
+        m_selectedEntryIndex = -1;
+        return;
+    }
+
+    // Определяем стартовый индекс (пропускаем первую запись, если она имеет то же имя, что и терминал)
+    int startIndex = 0;
+    if (!m_entries.empty() && m_entries[0].first == getName()) {
+        startIndex = 1;
+    }
+
+    // Если есть доступные записи для выбора
+    if (startIndex < m_entries.size()) {
+        // Выбираем случайную запись из доступных (исключая последнюю предупреждающую)
+        int numRegularEntries = m_entries.size() - 1;
+        if (numRegularEntries > startIndex) {
+            m_selectedEntryIndex = startIndex + (rand() % (numRegularEntries - startIndex));
+        }
+        else {
+            m_selectedEntryIndex = startIndex;
+        }
+    }
+    else {
+        m_selectedEntryIndex = -1;
     }
 }

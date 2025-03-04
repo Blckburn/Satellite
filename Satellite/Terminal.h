@@ -116,12 +116,31 @@ public:
      */
     void markAsRead() { m_wasEverRead = true; }
 
+    /**
+ * @brief Получение индекса выбранной записи
+ * @return Индекс записи для отображения
+ */
+    int getSelectedEntryIndex() const { return m_selectedEntryIndex; }
+
+    /**
+     * @brief Выбор случайной записи (вызывается при инициализации)
+     */
+    void selectRandomEntry();
+
+    /**
+ * @brief Установка индекса выбранной записи
+ * @param index Индекс записи для отображения
+ */
+    void setSelectedEntryIndex(int index) { m_selectedEntryIndex = index; }
+
+
 private:
     TerminalType m_terminalType;   ///< Тип терминала
     bool m_activated;              ///< Был ли терминал активирован
     float m_activationTime;        ///< Время, прошедшее с момента активации
     bool m_displayingInfo;         ///< Отображается ли сейчас информация
     bool m_wasEverRead = false;  ///< Флаг, был ли терминал когда-либо прочитан
+    int m_selectedEntryIndex = -1;  ///< Индекс случайно выбранной записи для отображения
 
     std::vector<std::pair<std::string, std::string>> m_entries;  ///< Записи терминала (заголовок, содержимое)
     std::function<void(Player*, Terminal*)> m_activationCallback; ///< Функция обратного вызова при активации
