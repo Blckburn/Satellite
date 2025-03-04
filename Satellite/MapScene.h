@@ -237,6 +237,24 @@ private:
     std::vector<OpenDoorInfo> m_openDoors;  ///< Список открытых дверей
 
     /**
+    * @brief Указатель на текущую дверь, с которой идет взаимодействие
+    */
+    std::shared_ptr<Door> m_currentInteractingDoor;
+
+    /**
+     * @brief Флаг, показывающий, идет ли в данный момент взаимодействие с дверью
+     */
+    bool m_isInteractingWithDoor;
+
+    /**
+ * @brief Генерирует двери в коридорах карты
+ * @param doorProbability Вероятность размещения двери в подходящем месте (0.0-1.0)
+ * @param maxDoors Максимальное количество дверей для генерации
+ */
+    void generateDoors(float doorProbability = 0.4f, int maxDoors = 8);
+
+
+    /**
      * @brief Сокращает длинный текст, если он превышает максимальную длину
      * @param text Исходный текст
      * @param maxLength Максимальная длина текста

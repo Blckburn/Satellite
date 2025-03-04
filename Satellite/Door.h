@@ -4,8 +4,9 @@
 #include "TileMap.h"
 #include <memory>
 
-// Forward declaration
+// Forward declarations
 class MapScene;
+class IsometricRenderer; // Добавляем forward declaration для IsometricRenderer
 
 /**
  * @brief Класс для представления двери в игровом мире
@@ -84,6 +85,57 @@ public:
      */
     const std::string& getInteractionHint() const;
 
+    /**
+     * @brief Начать процесс взаимодействия с дверью (открытие/закрытие с кастом)
+     * @return true, если взаимодействие было начато успешно
+     */
+    bool startInteraction();
+
+    /**
+     * @brief Отменить процесс взаимодействия с дверью
+     */
+    void cancelInteraction();
+
+    /**
+     * @brief Проверить, идет ли процесс взаимодействия с дверью
+     * @return true, если идет процесс взаимодействия
+     */
+    bool isInteracting() const { return m_isInteracting; }
+
+    /**
+     * @brief Получить текущий прогресс взаимодействия
+     * @return Значение от 0.0 до 1.0
+     */
+    float getInteractionProgress() const { return m_interactionProgress; }
+
+    /**
+     * @brief Обновить отображение прогресса взаимодействия
+     * @param progress Новое значение прогресса (0.0-1.0)
+     */
+    void updateInteractionProgress(float progress);
+
+    /**
+     * @brief Отрисовка индикатора взаимодействия над дверью
+     * @param renderer SDL рендерер
+     * @param isoRenderer Изометрический рендерер для преобразования координат
+     * @param centerX X координата центра экрана
+     * @param centerY Y координата центра экрана
+     */
+    void render(SDL_Renderer* renderer, IsometricRenderer* isoRenderer, int centerX, int centerY);
+
+
+    /**
+ * @brief Сбрасывает флаг требования отпускания клавиши
+ */
+    void resetKeyReleaseRequirement();
+
+    /**
+     * @brief Проверяет, требуется ли отпустить клавишу перед новым взаимодействием
+     * @return true, если требуется отпустить клавишу
+     */
+    bool isRequiringKeyRelease() const;
+
+
 private:
     /**
      * @brief Обновление состояния проходимости тайла
@@ -95,6 +147,16 @@ private:
      */
     void updateInteractionHint();
 
+    /**
+     * @brief Обновляет подсказку во время процесса взаимодействия
+     */
+    void updateInteractionHintDuringCast();
+
+    /**
+     * @brief Завершает процесс взаимодействия с дверью
+     */
+    void completeInteraction();
+
     bool m_isOpen;          ///< Флаг состояния двери (открыта/закрыта)
     TileMap* m_tileMap;     ///< Указатель на карту для обновления проходимости
     int m_tileX;            ///< X координата тайла, на котором находится дверь
@@ -104,4 +166,14 @@ private:
     MapScene* m_parentScene; ///< Указатель на родительскую сцену
     bool m_isVertical;         ///< Ориентация двери (вертикальная/горизонтальная)
     int m_biomeType;           ///< Тип биома для визуализации
+
+    // Свойства для системы "каст-времени"
+    bool m_isInteracting;               ///< Флаг, показывающий, что идет процесс взаимодействия
+    float m_interactionTimer;           ///< Таймер для отслеживания времени взаимодействия
+    float m_interactionRequiredTime;    ///< Требуемое время для завершения взаимодействия (в секундах)
+    float m_interactionProgress;        ///< Прогресс взаимодействия (0.0 - 1.0)
+
+    bool m_actionJustCompleted;     ///< Флаг, показывающий, что действие только что завершилось (для предотвращения автоповтора)
+    float m_cooldownTimer;          ///< Таймер кулдауна после завершения действия
+    bool m_requireKeyRelease;     ///< Флаг, показывающий, что требуется отпустить клавишу E перед новым взаимодействием
 };

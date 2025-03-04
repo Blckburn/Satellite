@@ -3,6 +3,7 @@
 #include "Logger.h"
 #include "TileType.h"
 #include "MapScene.h"
+#include "IsometricRenderer.h"
 
 Door::Door(const std::string& name, TileMap* tileMap, MapScene* parentScene, int biomeType)
     : InteractiveObject(name, InteractiveType::DOOR),
@@ -12,7 +13,14 @@ Door::Door(const std::string& name, TileMap* tileMap, MapScene* parentScene, int
     m_tileY(0),
     m_parentScene(parentScene),
     m_isVertical(false),
-    m_biomeType(biomeType) {
+    m_biomeType(biomeType),
+    m_isInteracting(false),
+    m_interactionTimer(0.0f),
+    m_interactionRequiredTime(1.0f), // 1 секунда для полного открытия/закрытия
+    m_interactionProgress(0.0f),
+    m_actionJustCompleted(false),
+    m_cooldownTimer(0.0f),
+    m_requireKeyRelease(false) {
 
     // Установка цвета в зависимости от биома
     switch (m_biomeType) {
@@ -130,22 +138,105 @@ bool Door::initialize() {
 void Door::update(float deltaTime) {
     // Базовое обновление интерактивного объекта
     InteractiveObject::update(deltaTime);
+
+    // Если действие только что завершилось, обновляем таймер кулдауна
+    if (m_actionJustCompleted) {
+        m_cooldownTimer -= deltaTime;
+
+        if (m_cooldownTimer <= 0.0f) {
+            m_actionJustCompleted = false;
+            m_cooldownTimer = 0.0f;
+        }
+    }
+
+    // Если идет процесс взаимодействия, обновляем таймер
+    if (m_isInteracting) {
+        m_interactionTimer += deltaTime;
+
+        // Обновляем прогресс взаимодействия
+        updateInteractionProgress(m_interactionTimer / m_interactionRequiredTime);
+
+        // Если достигнуто требуемое время, завершаем взаимодействие
+        if (m_interactionTimer >= m_interactionRequiredTime) {
+            completeInteraction();
+        }
+
+        // Обновляем подсказку с прогрессом
+        updateInteractionHintDuringCast();
+    }
 }
 
 bool Door::interact(Player* player) {
-    // Меняем только проходимость тайла, тип остается тем же (пол соответствующего биома)
+    // Вместо мгновенного выполнения действия, начинаем процесс взаимодействия
+    return startInteraction();
+}
+
+bool Door::startInteraction() {
+    // Если требуется отпустить клавишу, запрещаем новое взаимодействие
+    if (m_requireKeyRelease) {
+        return false;
+    }
+
+    // Если действие только что завершилось и идет кулдаун, запрещаем новое взаимодействие
+    if (m_actionJustCompleted) {
+        return false;
+    }
+
+    // Если уже идет взаимодействие, просто продолжаем его
+    if (m_isInteracting) {
+        return true;
+    }
+
+    // Начинаем процесс взаимодействия
+    m_isInteracting = true;
+    m_interactionTimer = 0.0f;
+    m_interactionProgress = 0.0f;
+
+    // Обновляем подсказку для отображения процесса
+    updateInteractionHintDuringCast();
+
+    LOG_INFO("Started " + std::string(m_isOpen ? "closing" : "opening") + " interaction with door " + getName());
+
+    return true;
+}
+
+
+void Door::cancelInteraction() {
+    if (!m_isInteracting) {
+        return;
+    }
+
+    // Отменяем процесс взаимодействия
+    m_isInteracting = false;
+    m_interactionTimer = 0.0f;
+    m_interactionProgress = 0.0f;
+
+    // Возвращаем стандартную подсказку
+    updateInteractionHint();
+
+    LOG_INFO("Cancelled interaction with door " + getName());
+}
+
+void Door::completeInteraction() {
+    // Завершаем процесс взаимодействия
+    m_isInteracting = false;
+    m_interactionTimer = 0.0f;
+
+    // Устанавливаем флаг завершения действия для предотвращения автоповтора
+    m_actionJustCompleted = true;
+    m_cooldownTimer = 0.5f; // Полсекунды кулдауна
+
+    // Устанавливаем флаг требования отпустить клавишу перед новым взаимодействием
+    m_requireKeyRelease = true;
+
+    // Меняем состояние двери
     if (m_tileMap && m_tileMap->isValidCoordinate(m_tileX, m_tileY)) {
         MapTile* tile = m_tileMap->getTile(m_tileX, m_tileY);
         if (tile) {
             if (!m_isOpen) {
-                // Открываем дверь (очищаем преграду) - делаем тайл проходимым, не меняя его тип
+                // Открываем дверь - делаем тайл проходимым
                 tile->setWalkable(true);
                 m_isOpen = true;
-
-                // Обновляем подсказку для закрытия
-                updateInteractionHint();
-
-                LOG_INFO("Door " + getName() + " is now open (obstacle cleared)");
 
                 // Визуально "открываем" дверь - делаем полупрозрачной
                 SDL_Color openColor = m_closedColor;
@@ -158,16 +249,11 @@ bool Door::interact(Player* player) {
                 }
             }
             else {
-                // Закрываем дверь (воссоздаем преграду) - делаем тайл непроходимым
+                // Закрываем дверь - делаем тайл непроходимым
                 tile->setWalkable(false);
                 m_isOpen = false;
 
-                // Обновляем подсказку для открытия
-                updateInteractionHint();
-
-                LOG_INFO("Door " + getName() + " is now closed (obstacle recreated)");
-
-                // Визуально "закрываем" дверь - восстанавливаем непрозрачный цвет
+                // Визуально "закрываем" дверь
                 setColor(m_closedColor);
 
                 // Если у двери есть родительская сцена, информируем её
@@ -178,7 +264,15 @@ bool Door::interact(Player* player) {
         }
     }
 
-    return true;
+    // Обновляем подсказку для нового состояния
+    updateInteractionHint();
+
+    LOG_INFO("Door " + getName() + " interaction completed, now " + (m_isOpen ? "open" : "closed"));
+}
+
+void Door::updateInteractionProgress(float progress) {
+    // Ограничиваем прогресс в пределах 0.0-1.0
+    m_interactionProgress = std::max(0.0f, std::min(1.0f, progress));
 }
 
 bool Door::isOpen() const {
@@ -254,11 +348,129 @@ void Door::updateInteractionHint() {
         }
     }
 
-    // Сохраняем сформированную подсказку
-    setInteractionHint("Press E to " + action);
+    // Для каст-времени мы теперь показываем "Hold E to..." вместо "Press E to..."
+    setInteractionHint("Hold E to " + action);
+}
+
+void Door::updateInteractionHintDuringCast() {
+    std::string action;
+
+    if (!m_isOpen) {
+        // Показываем, что идет процесс открытия
+        switch (m_biomeType) {
+        case 1: // FOREST
+            action = "cutting through branches";
+            break;
+        case 2: // DESERT
+            action = "digging through sand";
+            break;
+        case 3: // TUNDRA
+            action = "breaking ice";
+            break;
+        case 4: // VOLCANIC
+            action = "clearing rubble";
+            break;
+        default:
+            action = "opening door";
+            break;
+        }
+    }
+    else {
+        // Показываем, что идет процесс закрытия
+        switch (m_biomeType) {
+        case 1: // FOREST
+            action = "placing branches";
+            break;
+        case 2: // DESERT
+            action = "piling up sand";
+            break;
+        case 3: // TUNDRA
+            action = "rebuilding ice barrier";
+            break;
+        case 4: // VOLCANIC
+            action = "piling up rocks";
+            break;
+        default:
+            action = "closing door";
+            break;
+        }
+    }
+
+    // Добавляем прогресс в процентах
+    int progress = static_cast<int>(m_interactionProgress * 100.0f);
+    action += "... " + std::to_string(progress) + "%";
+
+    setInteractionHint("Hold E: " + action);
 }
 
 const std::string& Door::getInteractionHint() const {
     // Возвращаем нашу специфичную для двери подсказку
     return InteractiveObject::getInteractionHint();
+}
+
+void Door::render(SDL_Renderer* renderer, IsometricRenderer* isoRenderer, int centerX, int centerY) {
+    // Рисуем прогресс-бар только если идет взаимодействие
+    if (m_isInteracting && isoRenderer != nullptr) {
+        float doorX = getPosition().x;
+        float doorY = getPosition().y;
+        float doorZ = getPosition().z + 1.0f; // Немного выше двери
+
+        // Получаем экранные координаты двери
+        int screenX, screenY;
+        isoRenderer->worldToDisplay(doorX, doorY, doorZ, centerX, centerY, screenX, screenY);
+
+        // Размеры индикатора
+        int progressWidth = 40;
+        int progressHeight = 6;
+
+        // Рисуем фон индикатора
+        SDL_Rect progressBg = {
+            screenX - progressWidth / 2,
+            screenY - progressHeight / 2,
+            progressWidth,
+            progressHeight
+        };
+
+        // Фон полупрозрачный черный
+        SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_BLEND);
+        SDL_SetRenderDrawColor(renderer, 0, 0, 0, 180);
+        SDL_RenderFillRect(renderer, &progressBg);
+
+        // Рисуем заполненную часть
+        SDL_Rect progressFill = progressBg;
+        progressFill.w = static_cast<int>(progressFill.w * m_interactionProgress);
+
+        // Цвет зависит от типа действия
+        SDL_Color fillColor;
+        if (m_isOpen) {
+            // Закрываем дверь - красный индикатор
+            fillColor = { 220, 50, 50, 220 };
+        }
+        else {
+            // Открываем дверь - зеленый индикатор
+            fillColor = { 50, 220, 50, 220 };
+        }
+
+        SDL_SetRenderDrawColor(renderer, fillColor.r, fillColor.g, fillColor.b, fillColor.a);
+        SDL_RenderFillRect(renderer, &progressFill);
+
+        // Рамка индикатора
+        SDL_SetRenderDrawColor(renderer, 255, 255, 255, 200);
+        SDL_RenderDrawRect(renderer, &progressBg);
+    }
+}
+
+/**
+ * @brief Сбрасывает флаг требования отпускания клавиши
+ */
+void Door::resetKeyReleaseRequirement() {
+    m_requireKeyRelease = false;
+}
+
+/**
+ * @brief Проверяет, требуется ли отпустить клавишу перед новым взаимодействием
+ * @return true, если требуется отпустить клавишу
+ */
+bool Door::isRequiringKeyRelease() const {
+    return m_requireKeyRelease;
 }

@@ -11,10 +11,10 @@
 #include "Door.h"
 
 MapScene::MapScene(const std::string& name, Engine* engine)
-    : Scene(name), m_engine(engine), m_showDebug(false) {
+    : Scene(name), m_engine(engine), m_showDebug(false),
+    m_currentInteractingDoor(nullptr), m_isInteractingWithDoor(false) {
     // Примечание: Игрок будет инициализирован в методе initialize()
 }
-
 MapScene::~MapScene() {
 }
 
@@ -188,12 +188,31 @@ void MapScene::handleEvent(const SDL_Event& event) {
             // Переключение режима отладки
             m_showDebug = !m_showDebug;
             break;
+
+        case SDLK_e:
+            // Начало взаимодействия с объектами
+            handleInteraction();
+            break;
         }
     }
+    // Добавляем обработку отпускания клавиши E для системы каст-времени
+    else if (event.type == SDL_KEYUP && event.key.keysym.sym == SDLK_e) {
+        // Если идет взаимодействие с дверью, отменяем его при отпускании клавиши
+        if (m_currentInteractingDoor) {
+            m_currentInteractingDoor->cancelInteraction();
+            m_currentInteractingDoor = nullptr;
+            m_isInteractingWithDoor = false;
+            LOG_INFO("Interaction with door cancelled (key released)");
+        }
 
-    // Обработка взаимодействия с объектами
-    if (event.type == SDL_KEYDOWN && event.key.keysym.sym == SDLK_e) {
-        handleInteraction();
+        // Сбрасываем флаг требования отпускания клавиши у всех дверей
+        for (auto& obj : m_interactiveObjects) {
+            if (auto doorObj = std::dynamic_pointer_cast<Door>(obj)) {
+                if (doorObj->isRequiringKeyRelease()) {
+                    doorObj->resetKeyReleaseRequirement();
+                }
+            }
+        }
     }
 
     // Передаем события в базовый класс
@@ -218,6 +237,35 @@ void MapScene::update(float deltaTime) {
 
     // 2. Обновление камеры
     m_camera->update(deltaTime);
+
+    // Проверяем состояние текущего взаимодействия с дверью
+    if (m_isInteractingWithDoor && m_currentInteractingDoor) {
+        // Если дверь перестала взаимодействовать (завершила каст или игрок слишком далеко)
+        if (!m_currentInteractingDoor->isInteracting()) {
+            m_currentInteractingDoor = nullptr;
+            m_isInteractingWithDoor = false;
+        }
+        // Проверяем, не отошел ли игрок слишком далеко от двери
+        else if (m_player) {
+            float playerX = m_player->getFullX();
+            float playerY = m_player->getFullY();
+            float doorX = m_currentInteractingDoor->getPosition().x;
+            float doorY = m_currentInteractingDoor->getPosition().y;
+
+            float dx = playerX - doorX;
+            float dy = playerY - doorY;
+            float distanceToDoorsSquared = dx * dx + dy * dy;
+
+            // Если игрок отошел дальше радиуса взаимодействия, отменяем взаимодействие
+            float interactionRadius = m_currentInteractingDoor->getInteractionRadius();
+            if (distanceToDoorsSquared > interactionRadius * interactionRadius) {
+                m_currentInteractingDoor->cancelInteraction();
+                m_currentInteractingDoor = nullptr;
+                m_isInteractingWithDoor = false;
+                LOG_INFO("Interaction with door cancelled (player moved away)");
+            }
+        }
+    }
 
     // Обновление интерактивных объектов
     auto it = m_interactiveObjects.begin();
@@ -371,6 +419,7 @@ void MapScene::render(SDL_Renderer* renderer) {
 void MapScene::generateTestMap() {
     // Очищаем карту
     m_tileMap->clear();
+    m_openDoors.clear();
 
     // Создаем генератор комнат с случайным сидом
     static RoomGenerator roomGen(static_cast<unsigned int>(std::time(nullptr)));
@@ -1081,6 +1130,14 @@ void MapScene::renderWithBlockSorting(SDL_Renderer* renderer, int centerX, int c
 
     // 9. Рендерим все тайлы в правильном порядке
     m_tileRenderer->render(renderer, centerX, centerY);
+
+    // 10. Отрисовываем индикаторы прогресса над дверями
+    for (const auto& obj : m_interactiveObjects) {
+        if (auto doorObj = std::dynamic_pointer_cast<Door>(obj)) {
+            // Отрисовка прогресс-бара над дверью
+            doorObj->render(renderer, m_isoRenderer.get(), centerX, centerY);
+        }
+    }
 }
 
 void MapScene::addVolumetricTileToRenderer(int x, int y, float priority) {
@@ -1292,80 +1349,84 @@ void MapScene::handleInteraction() {
     float playerX = m_player->getFullX();
     float playerY = m_player->getFullY();
 
-    // Теперь мы не ищем отдельно открытые двери на тайлах,
-    // так как двери всегда остаются объектами на сцене
+    // Если уже идет взаимодействие с дверью, не ищем новые объекты
+    if (m_isInteractingWithDoor && m_currentInteractingDoor) {
+        // Продолжаем текущее взаимодействие
+        return;
+    }
 
-    // Ищем ближайший интерактивный объект
     std::shared_ptr<InteractiveObject> nearestObject = findNearestInteractiveObject(playerX, playerY);
 
     if (nearestObject && nearestObject->isInteractable()) {
-        // Взаимодействуем с объектом
-        if (nearestObject->interact(m_player.get())) {
-            // Взаимодействие успешно
-            LOG_INFO("Interaction with " + nearestObject->getName() + " successful");
+        // Проверяем, является ли объект дверью
+        if (auto doorObj = std::dynamic_pointer_cast<Door>(nearestObject)) {
+            // Начинаем процесс взаимодействия с дверью (с каст-временем)
+            if (doorObj->startInteraction()) {
+                m_currentInteractingDoor = doorObj;
+                m_isInteractingWithDoor = true;
+                LOG_INFO("Started interaction process with door " + doorObj->getName());
+            }
+        }
+        else {
+            // Для других объектов используем обычное мгновенное взаимодействие
+            if (nearestObject->interact(m_player.get())) {
+                // Взаимодействие успешно
+                LOG_INFO("Interaction with " + nearestObject->getName() + " successful");
 
-            // Формируем сообщение о взаимодействии в зависимости от типа объекта
-            std::string actionMessage = "Interacted with " + nearestObject->getName();
+                // Формируем сообщение о взаимодействии в зависимости от типа объекта
+                std::string actionMessage;
 
-            if (auto doorObj = std::dynamic_pointer_cast<Door>(nearestObject)) {
-                // Для дверей
-                if (doorObj->isOpen()) {
-                    actionMessage = "Opened " + nearestObject->getName();
+                if (auto pickupItem = std::dynamic_pointer_cast<PickupItem>(nearestObject)) {
+                    // Для предметов
+                    PickupItem::ItemType itemType = pickupItem->getItemType();
+                    std::string itemTypeStr;
+
+                    switch (itemType) {
+                    case PickupItem::ItemType::RESOURCE:
+                        itemTypeStr = " [Resource]";
+                        break;
+                    case PickupItem::ItemType::WEAPON:
+                        itemTypeStr = " [Weapon]";
+                        break;
+                    case PickupItem::ItemType::ARMOR:
+                        itemTypeStr = " [Armor]";
+                        break;
+                    case PickupItem::ItemType::CONSUMABLE:
+                        itemTypeStr = " [Consumable]";
+                        break;
+                    case PickupItem::ItemType::KEY:
+                        itemTypeStr = " [Key]";
+                        break;
+                    default:
+                        itemTypeStr = " [Item]";
+                        break;
+                    }
+
+                    actionMessage = "Picked up " + nearestObject->getName() + itemTypeStr;
                 }
                 else {
-                    actionMessage = "Closed " + nearestObject->getName();
-                }
-            }
-            else if (auto pickupItem = std::dynamic_pointer_cast<PickupItem>(nearestObject)) {
-                // Для предметов
-                PickupItem::ItemType itemType = pickupItem->getItemType();
-                std::string itemTypeStr;
-
-                switch (itemType) {
-                case PickupItem::ItemType::RESOURCE:
-                    itemTypeStr = " [Resource]";
-                    break;
-                case PickupItem::ItemType::WEAPON:
-                    itemTypeStr = " [Weapon]";
-                    break;
-                case PickupItem::ItemType::ARMOR:
-                    itemTypeStr = " [Armor]";
-                    break;
-                case PickupItem::ItemType::CONSUMABLE:
-                    itemTypeStr = " [Consumable]";
-                    break;
-                case PickupItem::ItemType::KEY:
-                    itemTypeStr = " [Key]";
-                    break;
-                default:
-                    itemTypeStr = " [Item]";
-                    break;
+                    // Для других интерактивных объектов
+                    switch (nearestObject->getInteractiveType()) {
+                    case InteractiveType::SWITCH:
+                        actionMessage = "Activated " + nearestObject->getName();
+                        break;
+                    case InteractiveType::TERMINAL:
+                        actionMessage = "Used " + nearestObject->getName();
+                        break;
+                    case InteractiveType::CONTAINER:
+                        actionMessage = "Opened " + nearestObject->getName();
+                        break;
+                    default:
+                        actionMessage = "Interacted with " + nearestObject->getName();
+                        break;
+                    }
                 }
 
-                actionMessage = "Picked up " + nearestObject->getName() + itemTypeStr;
+                // Отображаем подсказку с результатом взаимодействия
+                m_showInteractionPrompt = true;
+                m_interactionPromptTimer = 0.0f;
+                m_interactionPrompt = actionMessage;
             }
-            else {
-                // Для других интерактивных объектов
-                switch (nearestObject->getInteractiveType()) {
-                case InteractiveType::SWITCH:
-                    actionMessage = "Activated " + nearestObject->getName();
-                    break;
-                case InteractiveType::TERMINAL:
-                    actionMessage = "Used " + nearestObject->getName();
-                    break;
-                case InteractiveType::CONTAINER:
-                    actionMessage = "Opened " + nearestObject->getName();
-                    break;
-                default:
-                    // Для других типов используем подсказку по умолчанию
-                    break;
-                }
-            }
-
-            // Отображаем подсказку с результатом взаимодействия
-            m_showInteractionPrompt = true;
-            m_interactionPromptTimer = 0.0f;
-            m_interactionPrompt = actionMessage;
         }
     }
     else {
@@ -1377,6 +1438,23 @@ std::shared_ptr<InteractiveObject> MapScene::findNearestInteractiveObject(float 
     std::shared_ptr<InteractiveObject> nearest = nullptr;
     float minDistanceSquared = std::numeric_limits<float>::max();
 
+    // Получаем направление взгляда игрока
+    float playerDirX = 0.0f;
+    float playerDirY = 0.0f;
+
+    if (m_player) {
+        playerDirX = m_player->getDirectionX();
+        playerDirY = m_player->getDirectionY();
+    }
+
+    // Если направление не определено (игрок стоит на месте), используем последнее известное направление
+    if (std::abs(playerDirX) < 0.01f && std::abs(playerDirY) < 0.01f) {
+        // Если нет направления, будем считать, что игрок может взаимодействовать
+        // с объектами в любом направлении (классическое поведение)
+        playerDirX = 0.0f;
+        playerDirY = 0.0f;
+    }
+
     for (auto& object : m_interactiveObjects) {
         if (!object->isActive() || !object->isInteractable()) continue;
 
@@ -1384,19 +1462,50 @@ std::shared_ptr<InteractiveObject> MapScene::findNearestInteractiveObject(float 
         float objectX = object->getPosition().x;
         float objectY = object->getPosition().y;
 
-        // Вычисление расстояния до игрока
-        float dx = playerX - objectX;
-        float dy = playerY - objectY;
+        // Вычисление вектора от игрока к объекту
+        float dx = objectX - playerX;
+        float dy = objectY - playerY;
         float distanceSquared = dx * dx + dy * dy;
 
         // Получение радиуса взаимодействия объекта
         float interactionRadius = object->getInteractionRadius();
         float radiusSquared = interactionRadius * interactionRadius;
 
-        // Если объект находится в радиусе взаимодействия и ближе предыдущего
-        if (distanceSquared <= radiusSquared && distanceSquared < minDistanceSquared) {
-            minDistanceSquared = distanceSquared;
-            nearest = object;
+        // Если объект находится в радиусе взаимодействия
+        if (distanceSquared <= radiusSquared) {
+            // Проверяем угол между направлением игрока и направлением к объекту,
+            // если у игрока есть направление движения
+            bool objectInFront = true; // По умолчанию считаем, что объект перед игроком
+
+            if (std::abs(playerDirX) > 0.01f || std::abs(playerDirY) > 0.01f) {
+                // Нормализуем вектор направления к объекту
+                float length = std::sqrt(distanceSquared);
+                if (length > 0.0001f) { // Избегаем деления на ноль
+                    float normDx = dx / length;
+                    float normDy = dy / length;
+
+                    // Вычисляем скалярное произведение (dot product) между направлением игрока
+                    // и нормализованным вектором направления к объекту
+                    float dotProduct = playerDirX * normDx + playerDirY * normDy;
+
+                    // Если скалярное произведение положительное, объект находится перед игроком
+                    // (в пределах 180-градусного сектора)
+                    objectInFront = dotProduct > 0.0f;
+
+                    // Для более узкого сектора можно использовать порог больше 0
+                    // например, dotProduct > 0.5f будет давать 60-градусный сектор
+                    // а dotProduct > 0.7071f будет давать 45-градусный сектор
+
+                    // Используем более узкий сектор для точности выбора объекта
+                    objectInFront = dotProduct > 0.5f; // Примерно 60 градусов в каждую сторону
+                }
+            }
+
+            // Если объект находится перед игроком и ближе предыдущего ближайшего
+            if (objectInFront && distanceSquared < minDistanceSquared) {
+                minDistanceSquared = distanceSquared;
+                nearest = object;
+            }
         }
     }
 
@@ -1542,6 +1651,50 @@ void MapScene::renderInteractionPrompt(SDL_Renderer* renderer) {
             lastPrompt = m_interactionPrompt;
             LOG_INFO("Interaction prompt: " + m_interactionPrompt);
         }
+
+        // Если идет взаимодействие с дверью, рисуем полоску прогресса
+        if (m_isInteractingWithDoor && m_currentInteractingDoor) {
+            float progress = m_currentInteractingDoor->getInteractionProgress();
+
+            // Получаем размеры окна
+            int windowWidth, windowHeight;
+            SDL_GetRendererOutputSize(renderer, &windowWidth, &windowHeight);
+
+            // Создаем полоску прогресса под основной подсказкой
+            int progressWidth = 300;
+            int progressHeight = 8;
+
+            SDL_Rect progressBg = {
+                windowWidth / 2 - progressWidth / 2,
+                windowHeight - 40, // Расположение под текстом подсказки
+                progressWidth,
+                progressHeight
+            };
+
+            // Фон полоски (темно-серый, полупрозрачный)
+            SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_BLEND);
+            SDL_SetRenderDrawColor(renderer, 50, 50, 50, 180);
+            SDL_RenderFillRect(renderer, &progressBg);
+
+            // Заполненная часть полоски (зеленая)
+            SDL_Rect progressFill = progressBg;
+            progressFill.w = static_cast<int>(progressFill.w * progress);
+
+            // Цвет прогресс-бара зависит от того, открываем или закрываем
+            if (m_currentInteractingDoor->isOpen()) {
+                // Закрываем дверь - красный прогресс-бар
+                SDL_SetRenderDrawColor(renderer, 220, 50, 50, 220);
+            }
+            else {
+                // Открываем дверь - зеленый прогресс-бар
+                SDL_SetRenderDrawColor(renderer, 50, 220, 50, 220);
+            }
+            SDL_RenderFillRect(renderer, &progressFill);
+
+            // Рамка для полоски
+            SDL_SetRenderDrawColor(renderer, 180, 180, 180, 200);
+            SDL_RenderDrawRect(renderer, &progressBg);
+        }
     }
 }
 
@@ -1557,10 +1710,28 @@ void MapScene::createInteractiveItems() {
     // Используем случайный сид на основе текущего времени
     std::srand(static_cast<unsigned int>(std::time(nullptr)));
 
+    // Хранение позиций, которые уже заняты (двери и предметы)
+    std::set<std::pair<int, int>> usedPositions;
+
+    // 1. СНАЧАЛА ГЕНЕРИРУЕМ ДВЕРИ
+    // Генерируем двери в коридорах с вероятностью 0.4 и максимум 8 дверей
+    generateDoors(0.4f, 8);
+
+    // 2. ЗАПОМИНАЕМ ПОЗИЦИИ СОЗДАННЫХ ДВЕРЕЙ
+    // Проходим по всем созданным интерактивным объектам и запоминаем позиции дверей
+    for (const auto& obj : m_interactiveObjects) {
+        if (obj->getInteractiveType() == InteractiveType::DOOR) {
+            int objX = static_cast<int>(obj->getPosition().x);
+            int objY = static_cast<int>(obj->getPosition().y);
+            usedPositions.insert({ objX, objY });
+        }
+    }
+
+    // 3. ГЕНЕРИРУЕМ ПРЕДМЕТЫ, ИЗБЕГАЯ ЗАНЯТЫХ ПОЗИЦИЙ
     // Параметры генерации предметов
     int attempts = 0;
-    int maxAttempts = 100;      // Увеличиваем максимальное количество попыток
-    int itemsToPlace = 15;      // Увеличиваем количество предметов на карте
+    int maxAttempts = 100;
+    int itemsToPlace = 15;
     int itemsPlaced = 0;
 
     // Минимальные и максимальные значения для расстояния от игрока
@@ -1570,9 +1741,6 @@ void MapScene::createInteractiveItems() {
     // Текущая позиция игрока
     float playerX = m_player->getPosition().x;
     float playerY = m_player->getPosition().y;
-
-    // Хранение уже использованных позиций для предотвращения дублирования
-    std::set<std::pair<int, int>> usedPositions;
 
     // Название биома для специфичных предметов
     std::string biomeName;
@@ -1739,35 +1907,6 @@ void MapScene::createInteractiveItems() {
     float coverage = static_cast<float>(itemsPlaced) / (m_tileMap->getWidth() * m_tileMap->getHeight()) * 100.0f;
     LOG_INFO("Created " + std::to_string(itemsPlaced) + " random items on the map (coverage: " +
         std::to_string(coverage) + "%)");
-
-    // Добавляем тестовую дверь рядом с игроком
-    if (m_player) {
-        float playerX = m_player->getPosition().x;
-        float playerY = m_player->getPosition().y;
-
-        // Ищем подходящее место для двери рядом с игроком
-        std::vector<std::pair<int, int>> possibleDoorPositions = {
-            {1, 0},   // Справа
-            {-1, 0},  // Слева
-            {0, 1},   // Снизу
-            {0, -1}   // Сверху
-        };
-
-        for (const auto& offset : possibleDoorPositions) {
-            int doorX = static_cast<int>(playerX) + offset.first;
-            int doorY = static_cast<int>(playerY) + offset.second;
-
-            // Проверяем, что позиция валидна и там нет других объектов
-            if (m_tileMap->isValidCoordinate(doorX, doorY) &&
-                m_tileMap->isTileWalkable(doorX, doorY)) {
-
-                // Создаем дверь
-                std::string doorName = "Door_" + std::to_string(doorX) + "_" + std::to_string(doorY);
-                createTestDoor(static_cast<float>(doorX), static_cast<float>(doorY), doorName);
-                break;
-            }
-        }
-    }
 }
 
 
@@ -1862,4 +2001,260 @@ void MapScene::forgetDoorPosition(int x, int y) {
             break;
         }
     }
+}
+
+void MapScene::generateDoors(float doorProbability, int maxDoors) {
+    if (!m_tileMap) return;
+
+    LOG_INFO("Generating doors in corridors with probability " + std::to_string(doorProbability) +
+        " and max count " + std::to_string(maxDoors));
+
+    int doorsCreated = 0;
+    std::vector<std::pair<int, int>> potentialDoorLocations;
+
+    // 1. Сначала найдем все потенциальные места для дверей (коридоры)
+    for (int y = 1; y < m_tileMap->getHeight() - 1; y++) {
+        for (int x = 1; x < m_tileMap->getWidth() - 1; x++) {
+            // Проверяем только проходимые тайлы
+            if (!m_tileMap->isTileWalkable(x, y)) continue;
+
+            // Проверка на горизонтальный коридор: стены сверху и снизу
+            bool isHorizontalCorridor =
+                !m_tileMap->isTileWalkable(x, y - 1) && // Стена сверху
+                !m_tileMap->isTileWalkable(x, y + 1) && // Стена снизу
+                m_tileMap->isTileWalkable(x - 1, y) && // Проход слева
+                m_tileMap->isTileWalkable(x + 1, y);   // Проход справа
+
+            // Проверка на вертикальный коридор: стены слева и справа
+            bool isVerticalCorridor =
+                !m_tileMap->isTileWalkable(x - 1, y) && // Стена слева
+                !m_tileMap->isTileWalkable(x + 1, y) && // Стена справа
+                m_tileMap->isTileWalkable(x, y - 1) && // Проход сверху
+                m_tileMap->isTileWalkable(x, y + 1);   // Проход снизу
+
+            // Дополнительная проверка для узких проходов между комнатами
+            bool isNarrowPathway = false;
+
+            // Проверка для горизонтального прохода между двумя большими открытыми пространствами
+            if (m_tileMap->isTileWalkable(x - 1, y) && m_tileMap->isTileWalkable(x + 1, y)) {
+                // Считаем проходимые тайлы справа и слева, чтобы определить, является ли это проходом между комнатами
+                int leftOpenSpace = 0;
+                int rightOpenSpace = 0;
+
+                // Считаем открытое пространство слева
+                for (int dx = -1; dx >= -3 && x + dx >= 0; dx--) {
+                    if (m_tileMap->isTileWalkable(x + dx, y)) {
+                        leftOpenSpace++;
+                    }
+                    else {
+                        break;
+                    }
+                }
+
+                // Считаем открытое пространство справа
+                for (int dx = 1; dx <= 3 && x + dx < m_tileMap->getWidth(); dx++) {
+                    if (m_tileMap->isTileWalkable(x + dx, y)) {
+                        rightOpenSpace++;
+                    }
+                    else {
+                        break;
+                    }
+                }
+
+                // Если с обеих сторон есть открытое пространство, это может быть проход между комнатами
+                if (leftOpenSpace >= 2 && rightOpenSpace >= 2) {
+                    isNarrowPathway = true;
+                }
+            }
+
+            // Проверка для вертикального прохода между двумя открытыми пространствами
+            if (m_tileMap->isTileWalkable(x, y - 1) && m_tileMap->isTileWalkable(x, y + 1)) {
+                int topOpenSpace = 0;
+                int bottomOpenSpace = 0;
+
+                // Считаем открытое пространство сверху
+                for (int dy = -1; dy >= -3 && y + dy >= 0; dy--) {
+                    if (m_tileMap->isTileWalkable(x, y + dy)) {
+                        topOpenSpace++;
+                    }
+                    else {
+                        break;
+                    }
+                }
+
+                // Считаем открытое пространство снизу
+                for (int dy = 1; dy <= 3 && y + dy < m_tileMap->getHeight(); dy++) {
+                    if (m_tileMap->isTileWalkable(x, y + dy)) {
+                        bottomOpenSpace++;
+                    }
+                    else {
+                        break;
+                    }
+                }
+
+                // Если с обеих сторон есть открытое пространство, это может быть проход между комнатами
+                if (topOpenSpace >= 2 && bottomOpenSpace >= 2) {
+                    isNarrowPathway = true;
+                }
+            }
+
+            // Это место подходит для двери?
+            if (isHorizontalCorridor || isVerticalCorridor || isNarrowPathway) {
+                // Не размещаем двери слишком близко к краю карты
+                if (x > 3 && x < m_tileMap->getWidth() - 3 &&
+                    y > 3 && y < m_tileMap->getHeight() - 3) {
+
+                    // Также убедимся, что это не слишком близко к игроку
+                    if (m_player) {
+                        float playerX = m_player->getPosition().x;
+                        float playerY = m_player->getPosition().y;
+
+                        // Вычисляем расстояние до игрока
+                        float dx = playerX - static_cast<float>(x);
+                        float dy = playerY - static_cast<float>(y);
+                        float distanceToPlayer = std::sqrt(dx * dx + dy * dy);
+
+                        // Не размещаем двери слишком близко к игроку
+                        if (distanceToPlayer > 5.0f) {
+                            potentialDoorLocations.push_back({ x, y });
+                        }
+                    }
+                    else {
+                        potentialDoorLocations.push_back({ x, y });
+                    }
+                }
+            }
+        }
+    }
+
+    // 2. Перемешиваем потенциальные места, чтобы выбрать случайные
+    std::random_shuffle(potentialDoorLocations.begin(), potentialDoorLocations.end());
+
+    // 3. Создаем двери с заданной вероятностью, не превышая максимальное количество
+    for (const auto& location : potentialDoorLocations) {
+        if (doorsCreated >= maxDoors) break;
+
+        // Применяем вероятность размещения
+        float randomValue = static_cast<float>(rand()) / static_cast<float>(RAND_MAX);
+        if (randomValue <= doorProbability) {
+            int x = location.first;
+            int y = location.second;
+
+            // Определяем вертикальная это дверь или горизонтальная
+            bool isVertical =
+                !m_tileMap->isTileWalkable(x - 1, y) &&
+                !m_tileMap->isTileWalkable(x + 1, y);
+
+            // Создаем дверь
+            std::string doorName = "Door_" + std::to_string(x) + "_" + std::to_string(y);
+            auto door = std::make_shared<Door>(doorName, m_tileMap.get(), this, m_currentBiome);
+
+            // Устанавливаем позицию и ориентацию
+            door->setPosition(static_cast<float>(x), static_cast<float>(y), 0.3f);
+            door->setVertical(isVertical);
+
+            // Инициализируем
+            if (door->initialize()) {
+                // Добавляем дверь на сцену
+                addInteractiveObject(door);
+                doorsCreated++;
+
+                LOG_INFO("Created door at position (" + std::to_string(x) + ", " +
+                    std::to_string(y) + ") with " + (isVertical ? "vertical" : "horizontal") +
+                    " orientation for biome " + std::to_string(m_currentBiome));
+            }
+        }
+    }
+
+    // Разрешим генерацию в комнатах и помещениях
+    // Найдем случайные позиции в открытых пространствах (комнатах)
+    if (doorsCreated < maxDoors && !potentialDoorLocations.empty()) {
+        std::vector<std::pair<int, int>> roomPositions;
+
+        for (int y = 3; y < m_tileMap->getHeight() - 3; y++) {
+            for (int x = 3; x < m_tileMap->getWidth() - 3; x++) {
+                // Проверяем проходимый тайл с открытым пространством вокруг
+                if (m_tileMap->isTileWalkable(x, y)) {
+                    // Считаем количество проходимых тайлов вокруг (открытое пространство)
+                    int openTiles = 0;
+
+                    for (int dy = -1; dy <= 1; dy++) {
+                        for (int dx = -1; dx <= 1; dx++) {
+                            if (dx == 0 && dy == 0) continue; // Пропускаем центральный тайл
+
+                            if (m_tileMap->isValidCoordinate(x + dx, y + dy) &&
+                                m_tileMap->isTileWalkable(x + dx, y + dy)) {
+                                openTiles++;
+                            }
+                        }
+                    }
+
+                    // Если больше 6 из 8 окружающих тайлов проходимы - это внутри комнаты
+                    if (openTiles >= 6) {
+                        // Также убедимся, что это не слишком близко к игроку
+                        if (m_player) {
+                            float playerX = m_player->getPosition().x;
+                            float playerY = m_player->getPosition().y;
+
+                            // Вычисляем расстояние до игрока
+                            float dx = playerX - static_cast<float>(x);
+                            float dy = playerY - static_cast<float>(y);
+                            float distanceToPlayer = std::sqrt(dx * dx + dy * dy);
+
+                            // Не размещаем двери слишком близко к игроку
+                            if (distanceToPlayer > 5.0f) {
+                                roomPositions.push_back({ x, y });
+                            }
+                        }
+                        else {
+                            roomPositions.push_back({ x, y });
+                        }
+                    }
+                }
+            }
+        }
+
+        // Перемешиваем позиции в комнатах
+        std::random_shuffle(roomPositions.begin(), roomPositions.end());
+
+        // Добавляем двери в комнатах с меньшей вероятностью
+        float roomDoorProbability = doorProbability * 0.3f; // 30% от основной вероятности
+
+        // Выбираем случайные позиции из найденных
+        for (const auto& pos : roomPositions) {
+            if (doorsCreated >= maxDoors) break;
+
+            // Применяем пониженную вероятность для дверей в комнатах
+            float randomValue = static_cast<float>(rand()) / static_cast<float>(RAND_MAX);
+            if (randomValue <= roomDoorProbability) {
+                int x = pos.first;
+                int y = pos.second;
+
+                // Выбираем случайную ориентацию, поскольку в комнате любая ориентация может подойти
+                bool isVertical = (rand() % 2 == 0);
+
+                // Создаем дверь
+                std::string doorName = "RoomDoor_" + std::to_string(x) + "_" + std::to_string(y);
+                auto door = std::make_shared<Door>(doorName, m_tileMap.get(), this, m_currentBiome);
+
+                // Устанавливаем позицию и ориентацию
+                door->setPosition(static_cast<float>(x), static_cast<float>(y), 0.2f);
+                door->setVertical(isVertical);
+
+                // Инициализируем
+                if (door->initialize()) {
+                    // Добавляем дверь на сцену
+                    addInteractiveObject(door);
+                    doorsCreated++;
+
+                    LOG_INFO("Created room door at position (" + std::to_string(x) + ", " +
+                        std::to_string(y) + ") with " + (isVertical ? "vertical" : "horizontal") +
+                        " orientation for biome " + std::to_string(m_currentBiome));
+                }
+            }
+        }
+    }
+
+    LOG_INFO("Generated " + std::to_string(doorsCreated) + " doors out of " +
+        std::to_string(potentialDoorLocations.size()) + " potential locations");
 }
