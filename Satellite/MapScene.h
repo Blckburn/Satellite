@@ -13,6 +13,7 @@
 #include "PickupItem.h"
 #include <vector>
 #include "Door.h" 
+#include "Terminal.h"
 
 // Forward declaration
 class Engine;
@@ -210,6 +211,18 @@ public:
  */
     void forgetDoorPosition(int x, int y);
 
+    /**
+ * @brief Создание тестового терминала
+ * @param x X-координата
+ * @param y Y-координата
+ * @param name Имя терминала
+ * @param type Тип терминала
+ * @return Указатель на созданный терминал
+ */
+    std::shared_ptr<Terminal> createTestTerminal(float x, float y, const std::string& name, Terminal::TerminalType type);
+
+
+
 
 private:
     std::vector<std::shared_ptr<InteractiveObject>> m_interactiveObjects;  ///< Интерактивные объекты на сцене
@@ -294,5 +307,39 @@ private:
     * @brief Создает интерактивные предметы на карте
     */
     void createInteractiveItems();
+
+    /**
+ * @brief Создает интерактивные терминалы на карте
+ */
+    void createTerminals();
+
+    /**
+     * @brief Указатель на текущий терминал, с которым идет взаимодействие
+     */
+    std::shared_ptr<Terminal> m_currentInteractingTerminal;
+
+    /**
+     * @brief Флаг, показывающий, отображается ли сейчас информация терминала
+     */
+    bool m_isDisplayingTerminalInfo;
+
+    /**
+     * @brief Отрисовка информации терминала
+     * @param renderer SDL рендерер
+     */
+    void renderTerminalInfo(SDL_Renderer* renderer);
+
+    /**
+ * @brief Находит все углы комнат на карте
+ * @return Вектор пар координат углов комнат
+ */
+    std::vector<std::pair<int, int>> findRoomCorners();
+
+    /**
+     * @brief Запасной метод для случайного размещения терминала
+     * @param terminalType Тип терминала для создания
+     * @param terminalName Имя терминала
+     */
+    void placeTerminalRandomly(Terminal::TerminalType terminalType, const std::string& terminalName);
 
 };

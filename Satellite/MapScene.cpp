@@ -9,10 +9,12 @@
 #include "Logger.h"
 #include <set>
 #include "Door.h"
+#include "Terminal.h"
 
 MapScene::MapScene(const std::string& name, Engine* engine)
     : Scene(name), m_engine(engine), m_showDebug(false),
-    m_currentInteractingDoor(nullptr), m_isInteractingWithDoor(false) {
+    m_currentInteractingDoor(nullptr), m_isInteractingWithDoor(false), 
+    m_currentInteractingTerminal(nullptr), m_isDisplayingTerminalInfo(false) {
     // Примечание: Игрок будет инициализирован в методе initialize()
 }
 
@@ -68,6 +70,8 @@ bool MapScene::initialize() {
             LOG_WARNING("Failed to load default font. Text rendering will be disabled.");
         }
     }
+
+    m_isDisplayingTerminalInfo = false;
 
     // 6. Генерация тестовой карты
     generateTestMap();
@@ -161,7 +165,7 @@ float MapScene::calculateZOrderPriority(float x, float y, float z) {
 
     // 4. Финальный приоритет
     return baseDepth + heightFactor + boundaryFactor;
-}
+}   
 
 void MapScene::handleEvent(const SDL_Event& event) {
     // Обработка событий камеры
@@ -193,6 +197,17 @@ void MapScene::handleEvent(const SDL_Event& event) {
         case SDLK_e:
             // Начало взаимодействия с объектами
             handleInteraction();
+            break;
+
+        case SDLK_ESCAPE:
+            // Если отображается информация терминала, скрываем её
+            if (m_isDisplayingTerminalInfo && m_currentInteractingTerminal) {
+                m_isDisplayingTerminalInfo = false;
+                m_currentInteractingTerminal = nullptr;
+                LOG_INFO("Terminal info closed with ESC key");
+                return; // Прерываем обработку, чтобы ESC не влиял на другие системы
+            }
+            // В противном случае продолжаем стандартную обработку
             break;
         }
     }
@@ -268,6 +283,29 @@ void MapScene::update(float deltaTime) {
         }
     }
 
+    // Обновление состояния терминала
+    if (m_isDisplayingTerminalInfo && m_currentInteractingTerminal) {
+        // Проверяем, не отошел ли игрок слишком далеко от терминала
+        if (m_player) {
+            float playerX = m_player->getFullX();
+            float playerY = m_player->getFullY();
+            float terminalX = m_currentInteractingTerminal->getPosition().x;
+            float terminalY = m_currentInteractingTerminal->getPosition().y;
+
+            float dx = playerX - terminalX;
+            float dy = playerY - terminalY;
+            float distanceSquared = dx * dx + dy * dy;
+
+            // Если игрок отошел дальше радиуса взаимодействия, скрываем информацию
+            float interactionRadius = m_currentInteractingTerminal->getInteractionRadius();
+            if (distanceSquared > interactionRadius * interactionRadius * 1.5f) {
+                m_currentInteractingTerminal = nullptr;
+                m_isDisplayingTerminalInfo = false;
+                LOG_INFO("Terminal info hidden (player moved away)");
+            }
+        }
+    }
+
     // Обновление интерактивных объектов
     auto it = m_interactiveObjects.begin();
     while (it != m_interactiveObjects.end()) {
@@ -306,6 +344,13 @@ void MapScene::update(float deltaTime) {
             if (auto doorObj = std::dynamic_pointer_cast<Door>(nearestObject)) {
                 // Для дверей используем их собственную подсказку
                 m_interactionPrompt = doorObj->getInteractionHint();
+                m_showInteractionPrompt = true;
+                m_interactionPromptTimer = 0.0f;
+            }
+            // Добавляем обработку для терминалов
+            else if (auto terminalObj = std::dynamic_pointer_cast<Terminal>(nearestObject)) {
+                // Для терминалов используем их собственную подсказку
+                m_interactionPrompt = terminalObj->getInteractionHint();
                 m_showInteractionPrompt = true;
                 m_interactionPromptTimer = 0.0f;
             }
@@ -413,6 +458,11 @@ void MapScene::render(SDL_Renderer* renderer) {
     // Отрисовка подсказки для взаимодействия
     if (m_showInteractionPrompt) {
         renderInteractionPrompt(renderer);
+    }
+
+    // Отрисовка информации терминала
+    if (m_isDisplayingTerminalInfo && m_currentInteractingTerminal) {
+        renderTerminalInfo(renderer);
     }
 }
 
@@ -537,6 +587,7 @@ void MapScene::generateTestMap() {
 
     // Создаем интерактивные предметы на карте
     createInteractiveItems();
+    createTerminals();
 
     LOG_INFO("Generated test map with biome type: " + std::to_string(static_cast<int>(biomeType)));
 }
@@ -985,8 +1036,8 @@ void MapScene::renderWithBlockSorting(SDL_Renderer* renderer, int centerX, int c
                     playerColor, leftColor, rightColor,
                     obj.priority
                 );
-           
-// Отрисовка указателя направления персонажа
+
+                // Отрисовка указателя направления персонажа
                 if (m_player && m_player->isShowingDirectionIndicator()) {
                     m_player->renderDirectionIndicator(renderer, m_isoRenderer.get(), centerX, centerY);
                 }
@@ -1076,6 +1127,215 @@ void MapScene::renderWithBlockSorting(SDL_Renderer* renderer, int centerX, int c
                             topColor, leftColor, rightColor,
                             obj.priority
                         );
+                    }
+                }
+                else if (auto terminalObj = std::dynamic_pointer_cast<Terminal>(interactive)) {
+                    // Специальная визуализация для терминалов - делаем их больше
+                    height = obj.z;
+                    SDL_Color color = terminalObj->getColor();
+
+                    // Создаем цвета граней с более яркими контрастами
+                    SDL_Color topColor = color;
+
+                    // Верхняя часть с ярким цветом ("экран" терминала)
+                    SDL_Color screenColor = {
+                        static_cast<Uint8>(std::min(255, color.r + 50)),
+                        static_cast<Uint8>(std::min(255, color.g + 50)),
+                        static_cast<Uint8>(std::min(255, color.b + 50)),
+                        color.a
+                    };
+
+                    // Боковые части (корпус) темнее
+                    SDL_Color leftColor = {
+                        static_cast<Uint8>(color.r * 0.6f),
+                        static_cast<Uint8>(color.g * 0.6f),
+                        static_cast<Uint8>(color.b * 0.6f),
+                        color.a
+                    };
+
+                    SDL_Color rightColor = {
+                        static_cast<Uint8>(color.r * 0.4f),
+                        static_cast<Uint8>(color.g * 0.4f),
+                        static_cast<Uint8>(color.b * 0.4f),
+                        color.a
+                    };
+
+                    // Добавляем плавающий эффект и пульсацию для терминалов
+                    float pulseEffect = 0.1f * sinf(SDL_GetTicks() / 200.0f);
+
+                    // Основная база терминала (нижняя часть)
+                    m_tileRenderer->addVolumetricTile(
+                        obj.x, obj.y, height * 0.6f,
+                        nullptr, nullptr, nullptr,
+                        topColor, leftColor, rightColor,
+                        obj.priority
+                    );
+
+                    // Экран терминала (верхняя часть)
+                    m_tileRenderer->addVolumetricTile(
+                        obj.x, obj.y, height + pulseEffect,
+                        nullptr, nullptr, nullptr,
+                        screenColor, screenColor, screenColor,
+                        obj.priority + 0.1f
+                    );
+
+                    // Отображаем индикатор над терминалом, если он еще не прочитан
+                    if (terminalObj->shouldShowIndicator()) {
+                        // Определяем текущее время для анимаций
+                        Uint32 ticks = SDL_GetTicks();
+                        float currentTime = ticks / 1000.0f;
+
+                        // Определяем позицию для символа (немного выше терминала)
+                        float symbolX = obj.x;
+                        float symbolY = obj.y;
+                        float symbolZ = height + 0.5f;
+
+                        // Эффекты анимации - более выраженные
+                        float hoverEffect = 0.2f * sinf(currentTime * 2.0f);
+                        float rotationAngle = ticks % 3600 / 10.0f; // Вращение на 360 градусов каждые 10 секунд
+
+                        // Яркие пульсирующие цвета в зависимости от типа терминала
+                        SDL_Color baseColor;
+                        switch (terminalObj->getTerminalType()) {
+                        case Terminal::TerminalType::RESEARCH_SENSOR:
+                            baseColor = { 0, 255, 255, 255 }; // Яркий бирюзовый
+                            break;
+                        case Terminal::TerminalType::ANCIENT_CONSOLE:
+                            baseColor = { 255, 100, 255, 255 }; // Яркий фиолетовый
+                            break;
+                        case Terminal::TerminalType::EMERGENCY_BEACON:
+                            baseColor = { 255, 165, 0, 255 }; // Яркий оранжевый
+                            break;
+                        case Terminal::TerminalType::SCIENCE_STATION:
+                            baseColor = { 40, 170, 255, 255 }; // Яркий синий
+                            break;
+                        default:
+                            baseColor = { 255, 255, 255, 255 }; // Белый
+                        }
+
+                        // Пульсация цвета - более интенсивная
+                        float pulseFactor = 0.5f + 0.5f * sinf(currentTime * 4.0f);
+                        SDL_Color glowColor = {
+                            static_cast<Uint8>(baseColor.r),
+                            static_cast<Uint8>(baseColor.g),
+                            static_cast<Uint8>(baseColor.b),
+                            static_cast<Uint8>(180 + 75 * pulseFactor)
+                        };
+
+                        // Более яркий внешний ореол свечения
+                        SDL_Color outerGlowColor = {
+                            static_cast<Uint8>(baseColor.r * 0.7f),
+                            static_cast<Uint8>(baseColor.g * 0.7f),
+                            static_cast<Uint8>(baseColor.b * 0.7f),
+                            100 // Полупрозрачный
+                        };
+
+                        // Рисуем базовый куб - более крупный, полупрозрачный ореол свечения
+                        m_tileRenderer->addVolumetricTile(
+                            symbolX, symbolY, symbolZ + hoverEffect - 0.1f,
+                            nullptr, nullptr, nullptr,
+                            outerGlowColor, outerGlowColor, outerGlowColor,
+                            obj.priority + 10.0f
+                        );
+
+                        // Внутренний кубик - интенсивное свечение
+                        m_tileRenderer->addVolumetricTile(
+                            symbolX, symbolY, symbolZ + hoverEffect,
+                            nullptr, nullptr, nullptr,
+                            glowColor,
+                            {
+                                static_cast<Uint8>(glowColor.r * 0.8f),
+                                static_cast<Uint8>(glowColor.g * 0.8f),
+                                static_cast<Uint8>(glowColor.b * 0.8f),
+                                glowColor.a
+                            },
+        {
+            static_cast<Uint8>(glowColor.r * 0.7f),
+            static_cast<Uint8>(glowColor.g * 0.7f),
+            static_cast<Uint8>(glowColor.b * 0.7f),
+            glowColor.a
+        },
+                            obj.priority + 11.0f
+                        );
+
+                        // Рисуем символ в центре кубика
+                        std::string symbolStr = terminalObj->getIndicatorSymbol();
+
+                        // Преобразуем координаты в экранные с учетом эффекта парения
+                        int screenX, screenY;
+                        m_isoRenderer->worldToScreen(symbolX, symbolY, screenX, screenY);
+
+                        // Применяем преобразования камеры
+                        float cameraZoom = m_camera->getZoom();
+                        float cameraX = m_camera->getX();
+                        float cameraY = m_camera->getY();
+
+                        screenX = centerX + static_cast<int>((screenX - cameraX) * cameraZoom);
+                        const float HEIGHT_SCALE = 30.0f; // Масштаб для высоты в изометрии
+                        screenY = centerY + static_cast<int>((screenY - m_camera->getY() - (symbolZ + hoverEffect) * HEIGHT_SCALE) * m_camera->getZoom());
+
+                        // Рисуем символ с помощью SDL_ttf
+                        TTF_Font* font = m_engine->getResourceManager()->getFont("default");
+                        if (font) {
+                            // Создаем очень яркую поверхность для символа - чисто белую
+                            SDL_Surface* symbolSurface = TTF_RenderText_Blended(font, symbolStr.c_str(), { 255, 255, 255, 255 });
+                            if (symbolSurface) {
+                                SDL_Texture* symbolTexture = SDL_CreateTextureFromSurface(renderer, symbolSurface);
+                                if (symbolTexture) {
+                                    // Увеличиваем размер для лучшей видимости
+                                    int symbolSize = static_cast<int>(symbolSurface->h * 2.0f * cameraZoom);
+
+                                    // Настройка прямоугольника для отображения с учетом вращения
+                                    SDL_Rect symbolRect = {
+                                        screenX - symbolSize / 2,
+                                        screenY - symbolSize - 10, // Поднимаем чуть выше
+                                        symbolSize,
+                                        symbolSize
+                                    };
+
+                                    // Устанавливаем альфа-смешивание для эффекта свечения
+                                    SDL_SetTextureBlendMode(symbolTexture, SDL_BLENDMODE_ADD);
+
+                                    // Создаем центр вращения
+                                    SDL_Point center = { symbolSize / 2, symbolSize / 2 };
+
+                                    // Рисуем символ с вращением
+                                    SDL_RenderCopyEx(
+                                        renderer,
+                                        symbolTexture,
+                                        NULL,
+                                        &symbolRect,
+                                        rotationAngle, // Угол вращения
+                                        &center,        // Центр вращения
+                                        SDL_FLIP_NONE   // Без отражения
+                                    );
+
+                                    // Рисуем еще один символ с небольшим смещением для эффекта свечения
+                                    symbolRect.x -= 1;
+                                    symbolRect.y -= 1;
+                                    symbolRect.w += 2;
+                                    symbolRect.h += 2;
+
+                                    // Устанавливаем смешивание и прозрачность
+                                    SDL_SetTextureAlphaMod(symbolTexture, 150);
+
+                                    // Рисуем второй слой символа в противоположном направлении для эффекта свечения
+                                    SDL_RenderCopyEx(
+                                        renderer,
+                                        symbolTexture,
+                                        NULL,
+                                        &symbolRect,
+                                        -rotationAngle, // Противоположное вращение
+                                        &center,
+                                        SDL_FLIP_NONE
+                                    );
+
+                                    // Освобождаем ресурсы
+                                    SDL_DestroyTexture(symbolTexture);
+                                }
+                                SDL_FreeSurface(symbolSurface);
+                            }
+                        }
                     }
                 }
                 else if (auto pickupItem = std::dynamic_pointer_cast<PickupItem>(interactive)) {
@@ -1366,6 +1626,18 @@ void MapScene::handleInteraction() {
 
     std::shared_ptr<InteractiveObject> nearestObject = findNearestInteractiveObject(playerX, playerY);
 
+    // Если уже отображается информация терминала и найден ближайший объект
+    if (m_isDisplayingTerminalInfo && m_currentInteractingTerminal && nearestObject) {
+        // Проверяем, является ли ближайший объект текущим терминалом
+        if (nearestObject.get() == m_currentInteractingTerminal.get()) {
+            // Закрываем окно терминала при повторном нажатии E
+            m_isDisplayingTerminalInfo = false;
+            m_currentInteractingTerminal = nullptr;
+            LOG_INFO("Terminal info closed by pressing E again");
+            return;
+        }
+    }
+
     if (nearestObject && nearestObject->isInteractable()) {
         // Проверяем, является ли объект дверью
         if (auto doorObj = std::dynamic_pointer_cast<Door>(nearestObject)) {
@@ -1374,6 +1646,23 @@ void MapScene::handleInteraction() {
                 m_currentInteractingDoor = doorObj;
                 m_isInteractingWithDoor = true;
                 LOG_INFO("Started interaction process with door " + doorObj->getName());
+            }
+        }
+        // Проверяем, является ли объект терминалом
+        else if (auto terminalObj = std::dynamic_pointer_cast<Terminal>(nearestObject)) {
+            // Начинаем отображение информации терминала
+            if (terminalObj->interact(m_player.get())) {
+                m_currentInteractingTerminal = terminalObj;
+                m_isDisplayingTerminalInfo = true;
+                LOG_INFO("Started displaying information from terminal " + terminalObj->getName());
+
+                // Формируем сообщение о взаимодействии
+                std::string actionMessage = "Accessing " + nearestObject->getName();
+
+                // Отображаем подсказку с результатом взаимодействия
+                m_showInteractionPrompt = true;
+                m_interactionPromptTimer = 0.0f;
+                m_interactionPrompt = actionMessage;
             }
         }
         else {
@@ -2265,4 +2554,523 @@ void MapScene::generateDoors(float doorProbability, int maxDoors) {
 
     LOG_INFO("Generated " + std::to_string(doorsCreated) + " doors out of " +
         std::to_string(potentialDoorLocations.size()) + " potential locations");
+}
+
+std::shared_ptr<Terminal> MapScene::createTestTerminal(float x, float y, const std::string& name, Terminal::TerminalType type) {
+    // Создаем новый терминал указанного типа
+    auto terminal = std::make_shared<Terminal>(name, type);
+
+    // Устанавливаем позицию с высотой 1.0f (вместо 0.3f)
+    terminal->setPosition(x, y, 1.0f); // Увеличиваем высоту для лучшей видимости
+
+    // Инициализируем терминал
+    if (!terminal->initialize()) {
+        LOG_ERROR("Failed to initialize terminal: " + name);
+        return nullptr;
+    }
+
+    // Добавляем терминал на сцену
+    addInteractiveObject(terminal);
+
+    LOG_INFO("Created terminal: " + name + " of type " +
+        std::to_string(static_cast<int>(type)) +
+        " at position (" + std::to_string(x) + ", " + std::to_string(y) + ")");
+    return terminal;
+}
+
+
+void MapScene::createTerminals() {
+    if (!m_tileMap || !m_player) return;
+
+    // Хранение позиций, которые уже заняты другими объектами
+    std::set<std::pair<int, int>> usedPositions;
+
+    // Запоминаем позиции созданных дверей и предметов
+    for (const auto& obj : m_interactiveObjects) {
+        int objX = static_cast<int>(obj->getPosition().x);
+        int objY = static_cast<int>(obj->getPosition().y);
+        usedPositions.insert({ objX, objY });
+    }
+
+    // Текущая позиция игрока
+    float playerX = m_player->getPosition().x;
+    float playerY = m_player->getPosition().y;
+
+    // Определяем тип терминала в зависимости от биома
+    Terminal::TerminalType terminalType;
+    std::string terminalName;
+
+    switch (m_currentBiome) {
+    case 1: // FOREST
+        terminalType = Terminal::TerminalType::RESEARCH_SENSOR;
+        terminalName = "Research Sensor";
+        break;
+    case 2: // DESERT
+        terminalType = Terminal::TerminalType::ANCIENT_CONSOLE;
+        terminalName = "Ancient Console";
+        break;
+    case 3: // TUNDRA
+        terminalType = Terminal::TerminalType::SCIENCE_STATION;
+        terminalName = "Science Station";
+        break;
+    case 4: // VOLCANIC
+        terminalType = Terminal::TerminalType::EMERGENCY_BEACON;
+        terminalName = "Emergency Beacon";
+        break;
+    default:
+        // Если биом не определен, выбираем случайный тип
+        terminalType = static_cast<Terminal::TerminalType>(rand() % 4);
+        terminalName = "Unknown Terminal";
+        break;
+    }
+
+    // Найдем все углы комнат на карте
+    std::vector<std::pair<int, int>> roomCorners = findRoomCorners();
+
+    // Если углы не найдены, используем запасной метод с случайным размещением
+    if (roomCorners.empty()) {
+        LOG_WARNING("No room corners found, using fallback placement method");
+        // Здесь можно оставить старую логику поиска случайной позиции
+        placeTerminalRandomly(terminalType, terminalName);
+        return;
+    }
+
+    // Сортируем углы по удаленности от игрока (от дальних к ближним)
+    std::sort(roomCorners.begin(), roomCorners.end(),
+        [playerX, playerY](const std::pair<int, int>& a, const std::pair<int, int>& b) {
+            float distA = std::pow(a.first - playerX, 2) + std::pow(a.second - playerY, 2);
+            float distB = std::pow(b.first - playerX, 2) + std::pow(b.second - playerY, 2);
+            return distA > distB; // Сортировка от дальних к ближним
+        });
+
+    // Ищем подходящий угол, который не занят другими объектами
+    bool terminalPlaced = false;
+
+    for (const auto& corner : roomCorners) {
+        int x = corner.first;
+        int y = corner.second;
+
+        // Проверяем, что позиция не занята
+        if (usedPositions.find({ x, y }) == usedPositions.end()) {
+            // Проверяем минимальное расстояние от игрока
+            float distX = static_cast<float>(x) - playerX;
+            float distY = static_cast<float>(y) - playerY;
+            float distToPlayer = std::sqrt(distX * distX + distY * distY);
+
+            // Не размещаем терминал слишком близко к игроку
+            if (distToPlayer >= 8.0f) {
+                // Создаем терминал
+                auto terminal = createTestTerminal(static_cast<float>(x), static_cast<float>(y), terminalName, terminalType);
+
+                if (terminal) {
+                    // Добавляем контент в зависимости от биома
+                    switch (m_currentBiome) {
+                    case 1: // FOREST
+                        terminal->addEntry("Flora Analysis", "Dense vegetation indicates unusually accelerated growth cycles. Oxygen levels 28% above baseline.");
+                        terminal->addEntry("Warning", "Detected trace elements of unknown mutagenic compound in soil samples.");
+                        break;
+                    case 2: // DESERT
+                        terminal->addEntry("Mineral Survey", "High concentration of rare-earth elements detected in subsurface layers.");
+                        terminal->addEntry("Climate Data", "Nocturnal temperature variations exceed expected parameters by 200%.");
+                        break;
+                    case 3: // TUNDRA
+                        terminal->addEntry("Ice Core Sample", "Crystalline structures contain unknown bacterial microorganisms in suspended animation.");
+                        terminal->addEntry("Seismic Activity", "Regular harmonic patterns detected in deep-layer permafrost.");
+                        break;
+                    case 4: // VOLCANIC
+                        terminal->addEntry("Thermal Analysis", "Magma composition indicates artificial manipulation of geological processes.");
+                        terminal->addEntry("Atmospheric Alert", "Toxic gas emissions follow predictable patterns suggesting controlled release.");
+                        break;
+                    }
+
+                    // Добавляем общую запись для всех терминалов
+                    terminal->addEntry("Encrypted Message", "Signal detected from coordinates [REDACTED]. Message: 'Project Satellite compromised. Evacuate immediately.'");
+
+                    terminalPlaced = true;
+                    LOG_INFO("Terminal placed in room corner at position (" + std::to_string(x) + ", " + std::to_string(y) + ")");
+                    break;
+                }
+            }
+        }
+    }
+
+    // Если не удалось разместить терминал в углу, используем запасной метод
+    if (!terminalPlaced) {
+        LOG_WARNING("Could not place terminal in any corner, using fallback placement method");
+        placeTerminalRandomly(terminalType, terminalName);
+    }
+}
+
+std::vector<std::pair<int, int>> MapScene::findRoomCorners() {
+    std::vector<std::pair<int, int>> corners;
+
+    if (!m_tileMap) return corners;
+
+    // Проходим по всей карте
+    for (int y = 1; y < m_tileMap->getHeight() - 1; y++) {
+        for (int x = 1; x < m_tileMap->getWidth() - 1; x++) {
+            // Проверяем, что текущий тайл проходим (пол)
+            if (m_tileMap->isTileWalkable(x, y)) {
+                // Проверяем 8 возможных конфигураций угла:
+                //  1. Стена сверху и слева
+                if (!m_tileMap->isTileWalkable(x, y - 1) && !m_tileMap->isTileWalkable(x - 1, y)) {
+                    corners.push_back({ x, y });
+                    continue;
+                }
+
+                //  2. Стена сверху и справа
+                if (!m_tileMap->isTileWalkable(x, y - 1) && !m_tileMap->isTileWalkable(x + 1, y)) {
+                    corners.push_back({ x, y });
+                    continue;
+                }
+
+                //  3. Стена снизу и слева
+                if (!m_tileMap->isTileWalkable(x, y + 1) && !m_tileMap->isTileWalkable(x - 1, y)) {
+                    corners.push_back({ x, y });
+                    continue;
+                }
+
+                //  4. Стена снизу и справа
+                if (!m_tileMap->isTileWalkable(x, y + 1) && !m_tileMap->isTileWalkable(x + 1, y)) {
+                    corners.push_back({ x, y });
+                    continue;
+                }
+
+                // Проверяем диагональные углы - можно добавить при необходимости
+            }
+        }
+    }
+
+    // Фильтрация углов: предпочитаем те, что в больших открытых пространствах
+    std::vector<std::pair<int, int>> goodCorners;
+
+    for (const auto& corner : corners) {
+        int x = corner.first;
+        int y = corner.second;
+
+        // Считаем количество проходимых тайлов вокруг (в радиусе 2)
+        int openSpaceCount = 0;
+
+        for (int dy = -2; dy <= 2; dy++) {
+            for (int dx = -2; dx <= 2; dx++) {
+                if (dx == 0 && dy == 0) continue; // Пропускаем центральный тайл
+
+                if (m_tileMap->isValidCoordinate(x + dx, y + dy) &&
+                    m_tileMap->isTileWalkable(x + dx, y + dy)) {
+                    openSpaceCount++;
+                }
+            }
+        }
+
+        // Если вокруг угла достаточно открытого пространства, считаем его хорошим
+        if (openSpaceCount >= 10) { // Пороговое значение можно регулировать
+            goodCorners.push_back(corner);
+        }
+    }
+
+    // Если нашли хорошие углы, используем их, иначе возвращаем все углы
+    return goodCorners.empty() ? corners : goodCorners;
+}
+
+void MapScene::placeTerminalRandomly(Terminal::TerminalType terminalType, const std::string& terminalName) {
+    // Параметры поиска
+    int attempts = 0;
+    int maxAttempts = 100;
+    bool terminalPlaced = false;
+
+    // Минимальное и максимальное расстояние от игрока
+    float minDistanceFromPlayer = 8.0f;
+    float maxDistanceFromPlayer = 20.0f;
+
+    // Текущая позиция игрока
+    float playerX = m_player->getPosition().x;
+    float playerY = m_player->getPosition().y;
+
+    // Получаем список уже занятых позиций
+    std::set<std::pair<int, int>> usedPositions;
+    for (const auto& obj : m_interactiveObjects) {
+        int objX = static_cast<int>(obj->getPosition().x);
+        int objY = static_cast<int>(obj->getPosition().y);
+        usedPositions.insert({ objX, objY });
+    }
+
+    while (!terminalPlaced && attempts < maxAttempts) {
+        // Выбираем случайную позицию на карте
+        int x = std::rand() % m_tileMap->getWidth();
+        int y = std::rand() % m_tileMap->getHeight();
+
+        // Проверяем расстояние до игрока
+        float distX = static_cast<float>(x) - playerX;
+        float distY = static_cast<float>(y) - playerY;
+        float distToPlayer = std::sqrt(distX * distX + distY * distY);
+
+        // Создаем пару для проверки уникальности позиции
+        std::pair<int, int> position(x, y);
+
+        // Проверяем, что тайл проходим, находится на подходящем расстоянии от игрока
+        // и эта позиция ещё не используется
+        if (m_tileMap->isValidCoordinate(x, y) &&
+            m_tileMap->isTileWalkable(x, y) &&
+            distToPlayer >= minDistanceFromPlayer &&
+            distToPlayer <= maxDistanceFromPlayer &&
+            usedPositions.find(position) == usedPositions.end()) {
+
+            // Создаем терминал
+            auto terminal = createTestTerminal(static_cast<float>(x), static_cast<float>(y), terminalName, terminalType);
+
+            if (terminal) {
+                // Добавляем содержимое в зависимости от биома
+                switch (m_currentBiome) {
+                case 1: // FOREST
+                    terminal->addEntry("Flora Analysis", "Dense vegetation indicates unusually accelerated growth cycles. Oxygen levels 28% above baseline.");
+                    terminal->addEntry("Warning", "Detected trace elements of unknown mutagenic compound in soil samples.");
+                    break;
+                case 2: // DESERT
+                    terminal->addEntry("Mineral Survey", "High concentration of rare-earth elements detected in subsurface layers.");
+                    terminal->addEntry("Climate Data", "Nocturnal temperature variations exceed expected parameters by 200%.");
+                    break;
+                case 3: // TUNDRA
+                    terminal->addEntry("Ice Core Sample", "Crystalline structures contain unknown bacterial microorganisms in suspended animation.");
+                    terminal->addEntry("Seismic Activity", "Regular harmonic patterns detected in deep-layer permafrost.");
+                    break;
+                case 4: // VOLCANIC
+                    terminal->addEntry("Thermal Analysis", "Magma composition indicates artificial manipulation of geological processes.");
+                    terminal->addEntry("Atmospheric Alert", "Toxic gas emissions follow predictable patterns suggesting controlled release.");
+                    break;
+                }
+
+                // Добавляем общую запись
+                terminal->addEntry("Encrypted Message", "Signal detected from coordinates [REDACTED]. Message: 'Project Satellite compromised. Evacuate immediately.'");
+
+                terminalPlaced = true;
+                LOG_INFO("Terminal placed randomly at position (" + std::to_string(x) + ", " + std::to_string(y) + ")");
+                break;
+            }
+        }
+
+        attempts++;
+    }
+
+    if (!terminalPlaced) {
+        LOG_WARNING("Failed to place terminal after " + std::to_string(attempts) + " attempts");
+    }
+}
+
+void MapScene::renderTerminalInfo(SDL_Renderer* renderer) {
+    if (!m_isDisplayingTerminalInfo || !m_currentInteractingTerminal || !renderer) {
+        return;
+    }
+
+    // Получаем размеры окна
+    int windowWidth, windowHeight;
+    SDL_GetRendererOutputSize(renderer, &windowWidth, &windowHeight);
+
+    // Проверяем, доступен ли ResourceManager и есть ли шрифт
+    if (m_engine && m_engine->getResourceManager() &&
+        m_engine->getResourceManager()->hasFont("default")) {
+
+        // Получаем шрифт для отображения текста
+        TTF_Font* font = m_engine->getResourceManager()->getFont("default");
+        if (!font) return;
+
+        // Цвет текста и фона в зависимости от типа терминала
+        SDL_Color textColor = { 255, 255, 255, 255 }; // По умолчанию белый
+        SDL_Color bgColor = { 0, 0, 0, 220 }; // По умолчанию прозрачно-черный
+
+        // Настройка цветов в зависимости от типа терминала
+        switch (m_currentInteractingTerminal->getTerminalType()) {
+        case Terminal::TerminalType::RESEARCH_SENSOR:
+            textColor = { 220, 255, 255, 255 }; // Светло-бирюзовый
+            bgColor = { 0, 45, 45, 220 }; // Темно-бирюзовый фон
+            break;
+        case Terminal::TerminalType::ANCIENT_CONSOLE:
+            textColor = { 230, 200, 255, 255 }; // Светло-фиолетовый
+            bgColor = { 40, 0, 60, 220 }; // Темно-фиолетовый фон
+            break;
+        case Terminal::TerminalType::EMERGENCY_BEACON:
+            textColor = { 255, 220, 180, 255 }; // Светло-оранжевый
+            bgColor = { 60, 20, 0, 220 }; // Темно-оранжевый фон
+            break;
+        case Terminal::TerminalType::SCIENCE_STATION:
+            textColor = { 180, 220, 255, 255 }; // Светло-синий
+            bgColor = { 0, 30, 60, 220 }; // Темно-синий фон
+            break;
+        }
+
+        // Ширина и высота информационного окна - уменьшаем высоту, так как отображаем только одну запись
+        int infoWidth = windowWidth / 2 + 100;
+        int infoHeight = windowHeight / 4 + 50; // Уменьшенная высота для одной записи
+
+        // Отрисовываем полупрозрачный прямоугольник для фона
+        SDL_Rect infoRect = {
+            windowWidth / 2 - infoWidth / 2,
+            windowHeight / 2 - infoHeight / 2,
+            infoWidth,
+            infoHeight
+        };
+
+        // Устанавливаем цвет фона
+        SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_BLEND);
+        SDL_SetRenderDrawColor(renderer, bgColor.r, bgColor.g, bgColor.b, bgColor.a);
+        SDL_RenderFillRect(renderer, &infoRect);
+
+        // Рисуем рамку для окна терминала
+        SDL_SetRenderDrawColor(renderer, textColor.r, textColor.g, textColor.b, 180);
+        SDL_RenderDrawRect(renderer, &infoRect);
+
+        // Получаем записи терминала
+        const auto& entries = m_currentInteractingTerminal->getEntries();
+
+        // Отображаем название терминала вверху
+        std::string terminalTitle = m_currentInteractingTerminal->getName();
+
+        // Рисуем заголовок (всегда)
+        SDL_Surface* titleSurface = TTF_RenderText_Blended(font, terminalTitle.c_str(), textColor);
+        if (titleSurface) {
+            SDL_Texture* titleTexture = SDL_CreateTextureFromSurface(renderer, titleSurface);
+            if (titleTexture) {
+                SDL_Rect titleRect;
+                titleRect.w = titleSurface->w;
+                titleRect.h = titleSurface->h;
+                titleRect.x = windowWidth / 2 - titleRect.w / 2;
+                titleRect.y = infoRect.y + 20;
+
+                SDL_RenderCopy(renderer, titleTexture, NULL, &titleRect);
+                SDL_DestroyTexture(titleTexture);
+            }
+            SDL_FreeSurface(titleSurface);
+        }
+
+        // Отрисовываем разделительную линию под заголовком
+        SDL_Rect dividerRect = {
+            infoRect.x + 40,
+            infoRect.y + 55,
+            infoRect.w - 80,
+            1
+        };
+        SDL_SetRenderDrawColor(renderer, textColor.r, textColor.g, textColor.b, 150);
+        SDL_RenderFillRect(renderer, &dividerRect);
+
+        // Максимальная ширина текста для размещения внутри окна
+        int maxTextWidth = infoWidth - 100; // Оставляем отступы по бокам
+
+        // Вертикальное смещение
+        int yOffset = 80;
+
+        // Пропускаем первую запись, если ее заголовок совпадает с именем терминала
+        int startIndex = 0;
+        if (!entries.empty() && entries[0].first == terminalTitle) {
+            startIndex = 1;
+        }
+
+        // Отображаем только одну запись
+        if (startIndex < entries.size()) {
+            size_t i = startIndex;
+
+            // Отображаем заголовок записи
+            SDL_Surface* headerSurface = TTF_RenderText_Blended(font, entries[i].first.c_str(), textColor);
+            if (headerSurface) {
+                SDL_Texture* headerTexture = SDL_CreateTextureFromSurface(renderer, headerSurface);
+                if (headerTexture) {
+                    SDL_Rect headerRect;
+                    headerRect.w = headerSurface->w;
+                    headerRect.h = headerSurface->h;
+                    headerRect.x = infoRect.x + 40;
+                    headerRect.y = infoRect.y + yOffset;
+
+                    SDL_RenderCopy(renderer, headerTexture, NULL, &headerRect);
+                    SDL_DestroyTexture(headerTexture);
+                }
+                SDL_FreeSurface(headerSurface);
+            }
+
+            // Определяем содержимое и подготавливаем для разделения на строки
+            std::string content = entries[i].second;
+
+            // Создаем цвет для содержимого (немного прозрачнее)
+            SDL_Color contentColor = { textColor.r, textColor.g, textColor.b, 200 };
+
+            // Разбиваем текст на строки, чтобы поместить их в окно
+            std::vector<std::string> lines;
+
+            // Разделяем текст на строки максимум по 40-45 символов
+            int maxLineLength = 40;
+
+            int startPos = 0;
+            while (startPos < content.length()) {
+                int endPos = startPos + maxLineLength;
+                if (endPos >= content.length()) {
+                    // Если это конец текста, добавляем оставшуюся часть
+                    lines.push_back(content.substr(startPos));
+                    break;
+                }
+
+                // Находим последний пробел перед endPos
+                int lastSpace = content.rfind(' ', endPos);
+                if (lastSpace > startPos) {
+                    // Если есть пробел, разбиваем по нему
+                    lines.push_back(content.substr(startPos, lastSpace - startPos));
+                    startPos = lastSpace + 1;
+                }
+                else {
+                    // Если пробела нет, просто разбиваем по maxLineLength
+                    lines.push_back(content.substr(startPos, maxLineLength));
+                    startPos += maxLineLength;
+                }
+            }
+
+            // Отображаем каждую строку содержимого
+            int lineOffset = 30; // Начальное смещение от заголовка
+            for (const auto& line : lines) {
+                SDL_Surface* lineSurface = TTF_RenderText_Blended(font, line.c_str(), contentColor);
+                if (lineSurface) {
+                    SDL_Texture* lineTexture = SDL_CreateTextureFromSurface(renderer, lineSurface);
+                    if (lineTexture) {
+                        SDL_Rect lineRect;
+                        lineRect.w = lineSurface->w;
+                        lineRect.h = lineSurface->h;
+                        lineRect.x = infoRect.x + 45; // Небольшой отступ от края
+                        lineRect.y = infoRect.y + yOffset + lineOffset;
+
+                        SDL_RenderCopy(renderer, lineTexture, NULL, &lineRect);
+                        SDL_DestroyTexture(lineTexture);
+                    }
+                    SDL_FreeSurface(lineSurface);
+                }
+
+                lineOffset += 25; // Переходим к следующей строке
+            }
+        }
+
+        // Добавляем подсказку для закрытия внизу (только E)
+        SDL_Surface* promptSurface = TTF_RenderText_Blended(font, "Press E to close",
+            { textColor.r, textColor.g, textColor.b, 180 });
+        if (promptSurface) {
+            SDL_Texture* promptTexture = SDL_CreateTextureFromSurface(renderer, promptSurface);
+            if (promptTexture) {
+                SDL_Rect promptRect;
+                promptRect.w = promptSurface->w;
+                promptRect.h = promptSurface->h;
+                promptRect.x = windowWidth / 2 - promptRect.w / 2;
+                promptRect.y = infoRect.y + infoHeight - 25;
+
+                SDL_RenderCopy(renderer, promptTexture, NULL, &promptRect);
+                SDL_DestroyTexture(promptTexture);
+            }
+            SDL_FreeSurface(promptSurface);
+        }
+    }
+    else {
+        // Если шрифты недоступны, просто выводим в лог
+        LOG_INFO("Terminal info display: " + m_currentInteractingTerminal->getName());
+
+        const auto& entries = m_currentInteractingTerminal->getEntries();
+        if (!entries.empty()) {
+            size_t index = 0;
+            if (entries[0].first == m_currentInteractingTerminal->getName() && entries.size() > 1) {
+                index = 1;
+            }
+            LOG_INFO("- " + entries[index].first + ": " + entries[index].second);
+        }
+    }
 }
