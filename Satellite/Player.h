@@ -4,8 +4,9 @@
 #include "TileMap.h"
 #include <SDL.h>
 
-// Forward declaration для предотвращения циклических зависимостей
+// Forward declarations для предотвращения циклических зависимостей
 class CollisionSystem;
+class IsometricRenderer;
 struct CollisionResult;
 
 /**
@@ -192,6 +193,35 @@ public:
      */
     void setCollisionSystem(CollisionSystem* collisionSystem);
 
+    /**
+     * @brief Отрисовка указателя направления
+     * @param renderer SDL рендерер
+     * @param isoRenderer Изометрический рендерер
+     * @param centerX X-координата центра экрана
+     * @param centerY Y-координата центра экрана
+     */
+    void renderDirectionIndicator(SDL_Renderer* renderer,
+        IsometricRenderer* isoRenderer,
+        int centerX, int centerY) const;
+
+    /**
+     * @brief Проверка, следует ли отображать указатель направления
+     * @return true, если указатель должен отображаться
+     */
+    bool isShowingDirectionIndicator() const { return m_showDirectionIndicator; }
+
+    /**
+     * @brief Установка отображения указателя направления
+     * @param show true для включения, false для отключения
+     */
+    void setShowDirectionIndicator(bool show) { m_showDirectionIndicator = show; }
+
+    /**
+     * @brief Получение цвета указателя направления
+     * @return Цвет указателя
+     */
+    SDL_Color getDirectionIndicatorColor() const { return m_directionIndicatorColor; }
+
 private:
     /**
      * @brief Обновление текущего направления на основе вектора движения
@@ -204,9 +234,9 @@ private:
     void updateFaceColors();
 
     /**
-         * @brief Нормализует субкоординаты, чтобы они оставались в диапазоне [0, 1)
-         * и обновляет позицию тайла при выходе за его пределы
-         */
+     * @brief Нормализует субкоординаты, чтобы они оставались в диапазоне [0, 1)
+     * и обновляет позицию тайла при выходе за его пределы
+     */
     void NormalizeSubCoordinates();
 
 private:
@@ -223,4 +253,8 @@ private:
     SDL_Color m_leftFaceColor;      ///< Цвет левой грани
     SDL_Color m_rightFaceColor;     ///< Цвет правой грани
     CollisionSystem* m_collisionSystem = nullptr;  ///< Указатель на систему коллизий
+
+    // Параметры для указателя направления
+    bool m_showDirectionIndicator = true;                     ///< Показывать ли указатель
+    SDL_Color m_directionIndicatorColor = { 255, 255, 0, 255 }; ///< Цвет указателя (желтый по умолчанию)
 };

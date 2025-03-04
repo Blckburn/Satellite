@@ -15,6 +15,7 @@ MapScene::MapScene(const std::string& name, Engine* engine)
     m_currentInteractingDoor(nullptr), m_isInteractingWithDoor(false) {
     // Примечание: Игрок будет инициализирован в методе initialize()
 }
+
 MapScene::~MapScene() {
 }
 
@@ -414,7 +415,6 @@ void MapScene::render(SDL_Renderer* renderer) {
         renderInteractionPrompt(renderer);
     }
 }
-
 
 void MapScene::generateTestMap() {
     // Очищаем карту
@@ -985,6 +985,11 @@ void MapScene::renderWithBlockSorting(SDL_Renderer* renderer, int centerX, int c
                     playerColor, leftColor, rightColor,
                     obj.priority
                 );
+           
+// Отрисовка указателя направления персонажа
+                if (m_player && m_player->isShowingDirectionIndicator()) {
+                    m_player->renderDirectionIndicator(renderer, m_isoRenderer.get(), centerX, centerY);
+                }
             }
             break;
         }
@@ -1130,6 +1135,10 @@ void MapScene::renderWithBlockSorting(SDL_Renderer* renderer, int centerX, int c
 
     // 9. Рендерим все тайлы в правильном порядке
     m_tileRenderer->render(renderer, centerX, centerY);
+
+    if (m_player) {
+        m_player->renderDirectionIndicator(renderer, m_isoRenderer.get(), centerX, centerY);
+    }
 
     // 10. Отрисовываем индикаторы прогресса над дверями
     for (const auto& obj : m_interactiveObjects) {
@@ -1908,7 +1917,6 @@ void MapScene::createInteractiveItems() {
     LOG_INFO("Created " + std::to_string(itemsPlaced) + " random items on the map (coverage: " +
         std::to_string(coverage) + "%)");
 }
-
 
 std::shared_ptr<Door> MapScene::createTestDoor(float x, float y, const std::string& name) {
     // Создаем новую дверь с передачей указателя на текущую сцену и текущего биома

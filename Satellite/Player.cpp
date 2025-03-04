@@ -2,6 +2,7 @@
 #include <cmath>
 #include <iostream>
 #include "CollisionSystem.h"  // Добавить этот include
+#include "IsometricRenderer.h"
 
 Player::Player(const std::string& name, TileMap* tileMap)
     : Entity(name), m_tileMap(tileMap), m_currentDirection(Direction::SOUTH),
@@ -291,4 +292,113 @@ void Player::NormalizeSubCoordinates() {
         m_position.y -= 1.0f;
         m_subY += 1.0f;
     }
+}
+
+void Player::renderDirectionIndicator(SDL_Renderer* renderer, IsometricRenderer* isoRenderer, int centerX, int centerY) const {
+    // Получаем координаты игрока
+    float playerX = getFullX();
+    float playerY = getFullY();
+    float playerZ = getHeight();
+
+    // Вычисляем направляющий вектор в зависимости от текущего направления
+    float dirX = 0.0f, dirY = 0.0f;
+    const float arrowLength = 0.4f; // Длина стрелки
+
+    // Используем switch с enum class
+    switch (m_currentDirection) {
+    case Direction::NORTH:
+        dirX = 0.0f;
+        dirY = -1.0f;
+        break;
+    case Direction::NORTHEAST:
+        dirX = 0.7071f;  // cos(45°)
+        dirY = -0.7071f; // sin(45°)
+        break;
+    case Direction::EAST:
+        dirX = 1.0f;
+        dirY = 0.0f;
+        break;
+    case Direction::SOUTHEAST:
+        dirX = 0.7071f;
+        dirY = 0.7071f;
+        break;
+    case Direction::SOUTH:
+        dirX = 0.0f;
+        dirY = 1.0f;
+        break;
+    case Direction::SOUTHWEST:
+        dirX = -0.7071f;
+        dirY = 0.7071f;
+        break;
+    case Direction::WEST:
+        dirX = -1.0f;
+        dirY = 0.0f;
+        break;
+    case Direction::NORTHWEST:
+        dirX = -0.7071f;
+        dirY = -0.7071f;
+        break;
+    default:
+        // Для безопасности добавляем default
+        dirX = 0.0f;
+        dirY = 0.0f;
+        break;
+    }
+
+    // Вычисляем конечную точку стрелки
+    float endX = playerX + dirX * arrowLength;
+    float endY = playerY + dirY * arrowLength;
+
+    // Преобразуем мировые координаты в экранные
+    int screenStartX, screenStartY;
+    int screenEndX, screenEndY;
+
+    // Точка начала (центр игрока)
+    isoRenderer->worldToDisplay(
+        playerX, playerY, playerZ + 0.01f, // Слегка выше игрока
+        centerX, centerY, screenStartX, screenStartY
+    );
+
+    // Конечная точка стрелки
+    isoRenderer->worldToDisplay(
+        endX, endY, playerZ + 0.01f,
+        centerX, centerY, screenEndX, screenEndY
+    );
+
+    // Устанавливаем цвет линии
+    SDL_SetRenderDrawColor(renderer,
+        m_directionIndicatorColor.r,
+        m_directionIndicatorColor.g,
+        m_directionIndicatorColor.b,
+        m_directionIndicatorColor.a);
+
+    // Рисуем основную линию стрелки
+    SDL_RenderDrawLine(renderer, screenStartX, screenStartY, screenEndX, screenEndY);
+
+    // Рисуем наконечник стрелки
+    // Угол наконечника от основной линии
+    const float arrowAngle = 20.0f * 3.14159f / 180.0f; // 20 градусов в радианах
+    const float arrowSize = 10.0f; // Размер наконечника стрелки в пикселях
+
+    // Вычисляем вектор основной линии
+    float dx = static_cast<float>(screenEndX - screenStartX);
+    float dy = static_cast<float>(screenEndY - screenStartY);
+
+    // Нормализуем вектор
+    float length = sqrt(dx * dx + dy * dy);
+    if (length > 0) {
+        dx /= length;
+        dy /= length;
+    }
+
+    // Вычисляем векторы для двух линий наконечника
+    float arrowX1 = screenEndX - (dx * cos(arrowAngle) - dy * sin(arrowAngle)) * arrowSize;
+    float arrowY1 = screenEndY - (dx * sin(arrowAngle) + dy * cos(arrowAngle)) * arrowSize;
+
+    float arrowX2 = screenEndX - (dx * cos(-arrowAngle) - dy * sin(-arrowAngle)) * arrowSize;
+    float arrowY2 = screenEndY - (dx * sin(-arrowAngle) + dy * cos(-arrowAngle)) * arrowSize;
+
+    // Рисуем две линии наконечника
+    SDL_RenderDrawLine(renderer, screenEndX, screenEndY, static_cast<int>(arrowX1), static_cast<int>(arrowY1));
+    SDL_RenderDrawLine(renderer, screenEndX, screenEndY, static_cast<int>(arrowX2), static_cast<int>(arrowY2));
 }
