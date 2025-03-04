@@ -153,6 +153,7 @@
     <ClInclude Include="RenderableTile.h" />
     <ClInclude Include="ResourceManager.h" />
     <ClInclude Include="RoomGenerator.h" />
+    <ClInclude Include="Satellite.h" />
     <ClInclude Include="Scene.h" />
     <ClInclude Include="TestScene.h" />
     <ClInclude Include="TileMap.h" />
