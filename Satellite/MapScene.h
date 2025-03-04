@@ -12,6 +12,7 @@
 #include "InteractiveObject.h"
 #include "PickupItem.h"
 #include <vector>
+#include "Door.h" 
 
 // Forward declaration
 class Engine;
@@ -169,6 +170,47 @@ public:
      */
     std::shared_ptr<PickupItem> createTestPickupItem(float x, float y, const std::string& name, PickupItem::ItemType type);
 
+    /**
+     * @brief Создание тестовой двери
+     * @param x X-координата
+     * @param y Y-координата
+     * @param name Имя двери
+     * @return Указатель на созданную дверь
+     */
+    std::shared_ptr<Door> createTestDoor(float x, float y, const std::string& name);
+
+
+    /**
+ * @brief Запоминает позицию открытой двери
+ * @param x X-координата двери
+ * @param y Y-координата двери
+ * @param name Имя двери
+ */
+    void rememberDoorPosition(int x, int y, const std::string& name);
+
+    /**
+     * @brief Проверяет, является ли тайл открытой дверью
+     * @param x X-координата
+     * @param y Y-координата
+     * @return true, если это открытая дверь
+     */
+    bool isOpenDoorTile(int x, int y) const;
+
+    /**
+     * @brief Закрывает дверь на указанной позиции
+     * @param x X-координата
+     * @param y Y-координата
+     */
+    void closeDoorAtPosition(int x, int y);
+
+    /**
+ * @brief Удаляет информацию о двери из списка открытых дверей
+ * @param x X-координата двери
+ * @param y Y-координата двери
+ */
+    void forgetDoorPosition(int x, int y);
+
+
 private:
     std::vector<std::shared_ptr<InteractiveObject>> m_interactiveObjects;  ///< Интерактивные объекты на сцене
     float m_interactionPromptTimer;                                        ///< Таймер для отображения подсказки
@@ -184,6 +226,15 @@ private:
 
     bool m_showDebug;                           ///< Флаг отображения отладочной информации
     int m_currentBiome;                         ///< Текущий биом карты
+
+    // Структура для хранения информации об открытых дверях
+    struct OpenDoorInfo {
+        int tileX;          // X-координата двери
+        int tileY;          // Y-координата двери
+        std::string name;   // Имя двери
+    };
+
+    std::vector<OpenDoorInfo> m_openDoors;  ///< Список открытых дверей
 
     /**
      * @brief Сокращает длинный текст, если он превышает максимальную длину

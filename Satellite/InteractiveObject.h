@@ -135,6 +135,19 @@ public:
      */
     void setColor(const SDL_Color& color) { m_color = color; }
 
+    /**
+     * @brief Получение визуальной высоты объекта
+     * @return Высота для рендеринга
+     */
+    virtual float getHeight() const { return m_height; }
+
+    /**
+     * @brief Установка высоты объекта
+     * @param height Новая высота
+     */
+    virtual void setHeight(float height) { m_height = height; }
+
+
 protected:
     InteractiveType m_interactiveType;                  ///< Тип интерактивного объекта
     float m_interactionRadius;                          ///< Радиус, в котором возможно взаимодействие

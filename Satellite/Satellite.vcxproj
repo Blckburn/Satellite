@@ -141,6 +141,7 @@
   <ItemGroup>
     <ClInclude Include="Camera.h" />
     <ClInclude Include="CollisionSystem.h" />
+    <ClInclude Include="Door.h" />
     <ClInclude Include="Engine.h" />
     <ClInclude Include="Entity.h" />
     <ClInclude Include="InteractiveObject.h" />
@@ -163,6 +164,7 @@
   <ItemGroup>
     <ClCompile Include="Camera.cpp" />
     <ClCompile Include="CollisionSystem.cpp" />
+    <ClCompile Include="Door.cpp" />
     <ClCompile Include="Engine.cpp" />
     <ClCompile Include="Entity.cpp" />
     <ClCompile Include="InteractiveObject.cpp" />

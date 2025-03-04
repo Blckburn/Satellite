@@ -1,0 +1,264 @@
+﻿#include "Door.h"
+#include "Player.h"
+#include "Logger.h"
+#include "TileType.h"
+#include "MapScene.h"
+
+Door::Door(const std::string& name, TileMap* tileMap, MapScene* parentScene, int biomeType)
+    : InteractiveObject(name, InteractiveType::DOOR),
+    m_isOpen(false),
+    m_tileMap(tileMap),
+    m_tileX(0),
+    m_tileY(0),
+    m_parentScene(parentScene),
+    m_isVertical(false),
+    m_biomeType(biomeType) {
+
+    // Установка цвета в зависимости от биома
+    switch (m_biomeType) {
+    case 1: // FOREST
+        m_closedColor = { 60, 120, 40, 255 };  // Темно-зеленый (ветви)
+        break;
+    case 2: // DESERT
+        m_closedColor = { 230, 190, 130, 255 }; // Песочный (песчаные завалы)
+        break;
+    case 3: // TUNDRA
+        m_closedColor = { 200, 220, 255, 220 }; // Голубоватый (ледяная преграда)
+        break;
+    case 4: // VOLCANIC
+        m_closedColor = { 180, 60, 20, 255 };  // Темно-красный (застывшая лава)
+        break;
+    default:
+        m_closedColor = { 140, 70, 20, 255 };  // Стандартный коричневый
+        break;
+    }
+
+    // Устанавливаем начальный цвет
+    setColor(m_closedColor);
+
+    // Устанавливаем радиус взаимодействия
+    setInteractionRadius(1.8f);
+
+    // Устанавливаем подсказку в зависимости от биома и состояния
+    updateInteractionHint();
+
+    // Устанавливаем высоту преграды
+    setHeight(0.3f);
+}
+
+bool Door::initialize() {
+    // Получаем координаты тайла из позиции двери
+    m_tileX = static_cast<int>(getPosition().x);
+    m_tileY = static_cast<int>(getPosition().y);
+
+    // Определяем ориентацию двери на основе соседних стен
+    bool wallLeft = false;
+    bool wallRight = false;
+    bool wallUp = false;
+    bool wallDown = false;
+
+    if (m_tileMap) {
+        if (m_tileMap->isValidCoordinate(m_tileX - 1, m_tileY) &&
+            !m_tileMap->isTileWalkable(m_tileX - 1, m_tileY)) {
+            wallLeft = true;
+        }
+
+        if (m_tileMap->isValidCoordinate(m_tileX + 1, m_tileY) &&
+            !m_tileMap->isTileWalkable(m_tileX + 1, m_tileY)) {
+            wallRight = true;
+        }
+
+        if (m_tileMap->isValidCoordinate(m_tileX, m_tileY - 1) &&
+            !m_tileMap->isTileWalkable(m_tileX, m_tileY - 1)) {
+            wallUp = true;
+        }
+
+        if (m_tileMap->isValidCoordinate(m_tileX, m_tileY + 1) &&
+            !m_tileMap->isTileWalkable(m_tileX, m_tileY + 1)) {
+            wallDown = true;
+        }
+    }
+
+    // Устанавливаем ориентацию
+    if ((wallLeft && wallRight) || (!wallUp && !wallDown)) {
+        setVertical(false); // Горизонтальная дверь (проход запад-восток)
+    }
+    else {
+        setVertical(true);  // Вертикальная дверь (проход север-юг)
+    }
+
+    // Вместо EMPTY используем FLOOR, чтобы был виден пол биома
+    // (Тайл будет непроходимым, но визуально будет как пол)
+    if (m_tileMap && m_tileMap->isValidCoordinate(m_tileX, m_tileY)) {
+        // Определяем тип пола в зависимости от биома
+        TileType floorType = TileType::FLOOR;
+        switch (m_biomeType) {
+        case 1: // FOREST
+            floorType = TileType::GRASS;
+            break;
+        case 2: // DESERT
+            floorType = TileType::SAND;
+            break;
+        case 3: // TUNDRA
+            floorType = TileType::SNOW;
+            break;
+        case 4: // VOLCANIC
+            floorType = TileType::STONE; // или другой подходящий тип для вулканического биома
+            break;
+        default:
+            floorType = TileType::FLOOR;
+            break;
+        }
+
+        // Устанавливаем тип тайла и делаем его непроходимым
+        m_tileMap->setTileType(m_tileX, m_tileY, floorType);
+        MapTile* tile = m_tileMap->getTile(m_tileX, m_tileY);
+        if (tile) {
+            tile->setWalkable(false); // Изначально дверь закрыта
+        }
+    }
+
+    LOG_INFO("Door initialized at position (" +
+        std::to_string(m_tileX) + ", " +
+        std::to_string(m_tileY) + ") with " +
+        (m_isVertical ? "vertical" : "horizontal") + " orientation for biome " +
+        std::to_string(m_biomeType));
+
+    return InteractiveObject::initialize();
+}
+
+void Door::update(float deltaTime) {
+    // Базовое обновление интерактивного объекта
+    InteractiveObject::update(deltaTime);
+}
+
+bool Door::interact(Player* player) {
+    // Меняем только проходимость тайла, тип остается тем же (пол соответствующего биома)
+    if (m_tileMap && m_tileMap->isValidCoordinate(m_tileX, m_tileY)) {
+        MapTile* tile = m_tileMap->getTile(m_tileX, m_tileY);
+        if (tile) {
+            if (!m_isOpen) {
+                // Открываем дверь (очищаем преграду) - делаем тайл проходимым, не меняя его тип
+                tile->setWalkable(true);
+                m_isOpen = true;
+
+                // Обновляем подсказку для закрытия
+                updateInteractionHint();
+
+                LOG_INFO("Door " + getName() + " is now open (obstacle cleared)");
+
+                // Визуально "открываем" дверь - делаем полупрозрачной
+                SDL_Color openColor = m_closedColor;
+                openColor.a = 128; // Полупрозрачная
+                setColor(openColor);
+
+                // Если у двери есть родительская сцена, информируем её
+                if (m_parentScene) {
+                    m_parentScene->rememberDoorPosition(m_tileX, m_tileY, getName());
+                }
+            }
+            else {
+                // Закрываем дверь (воссоздаем преграду) - делаем тайл непроходимым
+                tile->setWalkable(false);
+                m_isOpen = false;
+
+                // Обновляем подсказку для открытия
+                updateInteractionHint();
+
+                LOG_INFO("Door " + getName() + " is now closed (obstacle recreated)");
+
+                // Визуально "закрываем" дверь - восстанавливаем непрозрачный цвет
+                setColor(m_closedColor);
+
+                // Если у двери есть родительская сцена, информируем её
+                if (m_parentScene) {
+                    m_parentScene->forgetDoorPosition(m_tileX, m_tileY);
+                }
+            }
+        }
+    }
+
+    return true;
+}
+
+bool Door::isOpen() const {
+    return m_isOpen;
+}
+
+void Door::setOpen(bool open) {
+    if (m_isOpen != open) {
+        m_isOpen = open;
+        updateTileWalkability();
+        updateInteractionHint();
+    }
+}
+
+void Door::updateTileWalkability() {
+    // Проверяем, что карта существует и координаты действительны
+    if (m_tileMap && m_tileMap->isValidCoordinate(m_tileX, m_tileY)) {
+        // Получаем текущий тайл
+        MapTile* tile = m_tileMap->getTile(m_tileX, m_tileY);
+        if (tile) {
+            // Если дверь открыта, используем тип DOOR (проходимый)
+            // Если дверь закрыта, используем тип WALL (непроходимый)
+            TileType tileType = m_isOpen ? TileType::DOOR : TileType::WALL;
+
+            // Обновляем тип тайла
+            m_tileMap->setTileType(m_tileX, m_tileY, tileType);
+        }
+    }
+}
+
+void Door::updateInteractionHint() {
+    // В зависимости от состояния двери и биома, устанавливаем соответствующую подсказку
+    std::string action;
+
+    if (!m_isOpen) {
+        // Дверь закрыта - показываем подсказку для открытия
+        switch (m_biomeType) {
+        case 1: // FOREST
+            action = "cut through dense branches";
+            break;
+        case 2: // DESERT
+            action = "dig through sand pile";
+            break;
+        case 3: // TUNDRA
+            action = "break ice formation";
+            break;
+        case 4: // VOLCANIC
+            action = "clear volcanic rubble";
+            break;
+        default:
+            action = "open door";
+            break;
+        }
+    }
+    else {
+        // Дверь открыта - показываем подсказку для закрытия
+        switch (m_biomeType) {
+        case 1: // FOREST
+            action = "place branches to block path";
+            break;
+        case 2: // DESERT
+            action = "pile up sand to block path";
+            break;
+        case 3: // TUNDRA
+            action = "rebuild ice barrier";
+            break;
+        case 4: // VOLCANIC
+            action = "pile up rocks to block path";
+            break;
+        default:
+            action = "close door";
+            break;
+        }
+    }
+
+    // Сохраняем сформированную подсказку
+    setInteractionHint("Press E to " + action);
+}
+
+const std::string& Door::getInteractionHint() const {
+    // Возвращаем нашу специфичную для двери подсказку
+    return InteractiveObject::getInteractionHint();
+}

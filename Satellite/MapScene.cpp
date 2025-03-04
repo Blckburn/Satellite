@@ -8,6 +8,7 @@
 #include "RoomGenerator.h"
 #include "Logger.h"
 #include <set>
+#include "Door.h"
 
 MapScene::MapScene(const std::string& name, Engine* engine)
     : Scene(name), m_engine(engine), m_showDebug(false) {
@@ -251,66 +252,76 @@ void MapScene::update(float deltaTime) {
             std::string objectName = nearestObject->getName();
             InteractiveType objectType = nearestObject->getInteractiveType();
 
-            // Формируем подсказку в зависимости от типа объекта
-            std::string actionText = "interact with";
-            std::string typeText = "";
-
-            switch (objectType) {
-            case InteractiveType::PICKUP:
-                actionText = "pick up";
-
-                // Если это предмет, можем получить дополнительную информацию о типе предмета
-                if (auto pickupItem = std::dynamic_pointer_cast<PickupItem>(nearestObject)) {
-                    PickupItem::ItemType itemType = pickupItem->getItemType();
-                    switch (itemType) {
-                    case PickupItem::ItemType::RESOURCE:
-                        typeText = " [Resource]";
-                        break;
-                    case PickupItem::ItemType::WEAPON:
-                        typeText = " [Weapon]";
-                        break;
-                    case PickupItem::ItemType::ARMOR:
-                        typeText = " [Armor]";
-                        break;
-                    case PickupItem::ItemType::CONSUMABLE:
-                        typeText = " [Consumable]";
-                        break;
-                    case PickupItem::ItemType::KEY:
-                        typeText = " [Key]";
-                        break;
-                    default:
-                        typeText = " [Item]";
-                        break;
-                    }
-                }
-                break;
-            case InteractiveType::DOOR:
-                actionText = "open/close";
-                typeText = " [Door]";
-                break;
-            case InteractiveType::SWITCH:
-                actionText = "activate";
-                typeText = " [Switch]";
-                break;
-            case InteractiveType::TERMINAL:
-                actionText = "use";
-                typeText = " [Terminal]";
-                break;
-            case InteractiveType::CONTAINER:
-                actionText = "open";
-                typeText = " [Container]";
-                break;
-            default:
-                // Для других типов используем подсказку по умолчанию
-                break;
+            // Проверяем, есть ли у объекта уже своя подсказка
+            // Для дверей попробуем использовать их собственную подсказку
+            if (auto doorObj = std::dynamic_pointer_cast<Door>(nearestObject)) {
+                // Для дверей используем их собственную подсказку
+                m_interactionPrompt = doorObj->getInteractionHint();
+                m_showInteractionPrompt = true;
+                m_interactionPromptTimer = 0.0f;
             }
+            else {
+                // Для других типов объектов формируем подсказку, как раньше
+                std::string actionText = "interact with";
+                std::string typeText = "";
 
-            // Формируем финальный текст подсказки
-            // Сокращаем имя объекта, если оно слишком длинное
-            std::string truncatedName = truncateText(objectName, 20); // Ограничиваем длину имени объекта
-            m_interactionPrompt = "Press E to " + actionText + " " + objectName + typeText;
-            m_showInteractionPrompt = true;
-            m_interactionPromptTimer = 0.0f;
+                switch (objectType) {
+                case InteractiveType::PICKUP:
+                    actionText = "pick up";
+
+                    // Если это предмет, можем получить дополнительную информацию о типе предмета
+                    if (auto pickupItem = std::dynamic_pointer_cast<PickupItem>(nearestObject)) {
+                        PickupItem::ItemType itemType = pickupItem->getItemType();
+                        switch (itemType) {
+                        case PickupItem::ItemType::RESOURCE:
+                            typeText = " [Resource]";
+                            break;
+                        case PickupItem::ItemType::WEAPON:
+                            typeText = " [Weapon]";
+                            break;
+                        case PickupItem::ItemType::ARMOR:
+                            typeText = " [Armor]";
+                            break;
+                        case PickupItem::ItemType::CONSUMABLE:
+                            typeText = " [Consumable]";
+                            break;
+                        case PickupItem::ItemType::KEY:
+                            typeText = " [Key]";
+                            break;
+                        default:
+                            typeText = " [Item]";
+                            break;
+                        }
+                    }
+                    break;
+                case InteractiveType::DOOR:
+                    actionText = "open/close";
+                    typeText = " [Door]";
+                    break;
+                case InteractiveType::SWITCH:
+                    actionText = "activate";
+                    typeText = " [Switch]";
+                    break;
+                case InteractiveType::TERMINAL:
+                    actionText = "use";
+                    typeText = " [Terminal]";
+                    break;
+                case InteractiveType::CONTAINER:
+                    actionText = "open";
+                    typeText = " [Container]";
+                    break;
+                default:
+                    // Для других типов используем подсказку по умолчанию
+                    break;
+                }
+
+                // Формируем финальный текст подсказки
+                // Сокращаем имя объекта, если оно слишком длинное
+                std::string truncatedName = truncateText(objectName, 20); // Ограничиваем длину имени объекта
+                m_interactionPrompt = "Press E to " + actionText + " " + objectName + typeText;
+                m_showInteractionPrompt = true;
+                m_interactionPromptTimer = 0.0f;
+            }
         }
     }
 
@@ -932,33 +943,136 @@ void MapScene::renderWithBlockSorting(SDL_Renderer* renderer, int centerX, int c
             auto& interactive = obj.interactiveObj;
             if (interactive) {
                 SDL_Color color = interactive->getColor();
-
-                // Эффект парения для предметов
                 float height = obj.z;
-                if (auto pickupItem = std::dynamic_pointer_cast<PickupItem>(interactive)) {
-                    height += 0.15f * sinf(SDL_GetTicks() / 500.0f);
+
+                // Обработка двери как визуального объекта
+                if (auto doorObj = std::dynamic_pointer_cast<Door>(interactive)) {
+                    height = doorObj->getHeight();
+
+                    bool isVertical = doorObj->isVertical();
+
+                    // Цвета основаны на состоянии (открыта/закрыта)
+                    SDL_Color topColor = color;
+
+                    // Создаем дополнительные цвета для граней
+                    SDL_Color leftColor = {
+                        static_cast<Uint8>(color.r * 0.7f),
+                        static_cast<Uint8>(color.g * 0.7f),
+                        static_cast<Uint8>(color.b * 0.7f),
+                        color.a
+                    };
+
+                    SDL_Color rightColor = {
+                        static_cast<Uint8>(color.r * 0.5f),
+                        static_cast<Uint8>(color.g * 0.5f),
+                        static_cast<Uint8>(color.b * 0.5f),
+                        color.a
+                    };
+
+                    // Расчет размера и положения двери в зависимости от ориентации
+                    float doorWidth = 0.3f;  // Ширина двери (доля от тайла)
+                    float doorLength = 0.8f; // Длина двери (доля от тайла)
+
+                    float offsetX = 0.0f;
+                    float offsetY = 0.0f;
+
+                    if (isVertical) {
+                        // Вертикальная дверь (проход север-юг)
+                        offsetX = (1.0f - doorWidth) / 2.0f;
+                    }
+                    else {
+                        // Горизонтальная дверь (проход запад-восток)
+                        offsetY = (1.0f - doorWidth) / 2.0f;
+                    }
+
+                    // Увеличиваем ширину для лучшей видимости в зависимости от биома
+                    switch (m_currentBiome) {
+                    case 1: // FOREST - ветви более протяженные
+                        doorWidth = 0.4f;
+                        break;
+                    case 2: // DESERT - песчаные завалы более широкие
+                        doorWidth = 0.5f;
+                        break;
+                    case 3: // TUNDRA - ледяные преграды тонкие
+                        doorWidth = 0.25f;
+                        break;
+                    case 4: // VOLCANIC - каменные завалы широкие
+                        doorWidth = 0.5f;
+                        break;
+                    }
+
+                    if (isVertical) {
+                        // Рендерим вертикальную дверь
+                        m_tileRenderer->addVolumetricTile(
+                            obj.x + offsetX,
+                            obj.y + (1.0f - doorLength) / 2.0f,
+                            height,
+                            nullptr, nullptr, nullptr,
+                            topColor, leftColor, rightColor,
+                            obj.priority
+                        );
+                    }
+                    else {
+                        // Рендерим горизонтальную дверь
+                        m_tileRenderer->addVolumetricTile(
+                            obj.x + (1.0f - doorLength) / 2.0f,
+                            obj.y + offsetY,
+                            height,
+                            nullptr, nullptr, nullptr,
+                            topColor, leftColor, rightColor,
+                            obj.priority
+                        );
+                    }
                 }
+                else if (auto pickupItem = std::dynamic_pointer_cast<PickupItem>(interactive)) {
+                    // Эффект парения для предметов
+                    height += 0.15f * sinf(SDL_GetTicks() / 500.0f);
 
-                // Создаем оттенки для граней
-                SDL_Color leftColor = {
-                    static_cast<Uint8>(color.r * 0.7f),
-                    static_cast<Uint8>(color.g * 0.7f),
-                    static_cast<Uint8>(color.b * 0.7f),
-                    color.a
-                };
-                SDL_Color rightColor = {
-                    static_cast<Uint8>(color.r * 0.5f),
-                    static_cast<Uint8>(color.g * 0.5f),
-                    static_cast<Uint8>(color.b * 0.5f),
-                    color.a
-                };
+                    // Стандартные цвета для других интерактивных объектов
+                    SDL_Color leftColor = {
+                        static_cast<Uint8>(color.r * 0.7f),
+                        static_cast<Uint8>(color.g * 0.7f),
+                        static_cast<Uint8>(color.b * 0.7f),
+                        color.a
+                    };
 
-                m_tileRenderer->addVolumetricTile(
-                    obj.x, obj.y, height,
-                    nullptr, nullptr, nullptr,
-                    color, leftColor, rightColor,
-                    obj.priority
-                );
+                    SDL_Color rightColor = {
+                        static_cast<Uint8>(color.r * 0.5f),
+                        static_cast<Uint8>(color.g * 0.5f),
+                        static_cast<Uint8>(color.b * 0.5f),
+                        color.a
+                    };
+
+                    m_tileRenderer->addVolumetricTile(
+                        obj.x, obj.y, height,
+                        nullptr, nullptr, nullptr,
+                        color, leftColor, rightColor,
+                        obj.priority
+                    );
+                }
+                else {
+                    // Стандартные цвета для других интерактивных объектов
+                    SDL_Color leftColor = {
+                        static_cast<Uint8>(color.r * 0.7f),
+                        static_cast<Uint8>(color.g * 0.7f),
+                        static_cast<Uint8>(color.b * 0.7f),
+                        color.a
+                    };
+
+                    SDL_Color rightColor = {
+                        static_cast<Uint8>(color.r * 0.5f),
+                        static_cast<Uint8>(color.g * 0.5f),
+                        static_cast<Uint8>(color.b * 0.5f),
+                        color.a
+                    };
+
+                    m_tileRenderer->addVolumetricTile(
+                        obj.x, obj.y, height,
+                        nullptr, nullptr, nullptr,
+                        color, leftColor, rightColor,
+                        obj.priority
+                    );
+                }
             }
             break;
         }
@@ -1178,6 +1292,10 @@ void MapScene::handleInteraction() {
     float playerX = m_player->getFullX();
     float playerY = m_player->getFullY();
 
+    // Теперь мы не ищем отдельно открытые двери на тайлах,
+    // так как двери всегда остаются объектами на сцене
+
+    // Ищем ближайший интерактивный объект
     std::shared_ptr<InteractiveObject> nearestObject = findNearestInteractiveObject(playerX, playerY);
 
     if (nearestObject && nearestObject->isInteractable()) {
@@ -1187,42 +1305,48 @@ void MapScene::handleInteraction() {
             LOG_INFO("Interaction with " + nearestObject->getName() + " successful");
 
             // Формируем сообщение о взаимодействии в зависимости от типа объекта
-            std::string actionMessage;
+            std::string actionMessage = "Interacted with " + nearestObject->getName();
 
-            if (auto pickupItem = std::dynamic_pointer_cast<PickupItem>(nearestObject)) {
+            if (auto doorObj = std::dynamic_pointer_cast<Door>(nearestObject)) {
+                // Для дверей
+                if (doorObj->isOpen()) {
+                    actionMessage = "Opened " + nearestObject->getName();
+                }
+                else {
+                    actionMessage = "Closed " + nearestObject->getName();
+                }
+            }
+            else if (auto pickupItem = std::dynamic_pointer_cast<PickupItem>(nearestObject)) {
                 // Для предметов
                 PickupItem::ItemType itemType = pickupItem->getItemType();
                 std::string itemTypeStr;
 
                 switch (itemType) {
                 case PickupItem::ItemType::RESOURCE:
-                    itemTypeStr = "Resource";
+                    itemTypeStr = " [Resource]";
                     break;
                 case PickupItem::ItemType::WEAPON:
-                    itemTypeStr = "Weapon";
+                    itemTypeStr = " [Weapon]";
                     break;
                 case PickupItem::ItemType::ARMOR:
-                    itemTypeStr = "Armor";
+                    itemTypeStr = " [Armor]";
                     break;
                 case PickupItem::ItemType::CONSUMABLE:
-                    itemTypeStr = "Consumable";
+                    itemTypeStr = " [Consumable]";
                     break;
                 case PickupItem::ItemType::KEY:
-                    itemTypeStr = "Key";
+                    itemTypeStr = " [Key]";
                     break;
                 default:
-                    itemTypeStr = "Item";
+                    itemTypeStr = " [Item]";
                     break;
                 }
 
-                actionMessage = "Picked up " + nearestObject->getName() + " [" + itemTypeStr + "]";
+                actionMessage = "Picked up " + nearestObject->getName() + itemTypeStr;
             }
             else {
                 // Для других интерактивных объектов
                 switch (nearestObject->getInteractiveType()) {
-                case InteractiveType::DOOR:
-                    actionMessage = "Operated " + nearestObject->getName();
-                    break;
                 case InteractiveType::SWITCH:
                     actionMessage = "Activated " + nearestObject->getName();
                     break;
@@ -1233,7 +1357,7 @@ void MapScene::handleInteraction() {
                     actionMessage = "Opened " + nearestObject->getName();
                     break;
                 default:
-                    actionMessage = "Interacted with " + nearestObject->getName();
+                    // Для других типов используем подсказку по умолчанию
                     break;
                 }
             }
@@ -1248,7 +1372,6 @@ void MapScene::handleInteraction() {
         LOG_INFO("No interactive objects in range");
     }
 }
-
 
 std::shared_ptr<InteractiveObject> MapScene::findNearestInteractiveObject(float playerX, float playerY) {
     std::shared_ptr<InteractiveObject> nearest = nullptr;
@@ -1616,4 +1739,127 @@ void MapScene::createInteractiveItems() {
     float coverage = static_cast<float>(itemsPlaced) / (m_tileMap->getWidth() * m_tileMap->getHeight()) * 100.0f;
     LOG_INFO("Created " + std::to_string(itemsPlaced) + " random items on the map (coverage: " +
         std::to_string(coverage) + "%)");
+
+    // Добавляем тестовую дверь рядом с игроком
+    if (m_player) {
+        float playerX = m_player->getPosition().x;
+        float playerY = m_player->getPosition().y;
+
+        // Ищем подходящее место для двери рядом с игроком
+        std::vector<std::pair<int, int>> possibleDoorPositions = {
+            {1, 0},   // Справа
+            {-1, 0},  // Слева
+            {0, 1},   // Снизу
+            {0, -1}   // Сверху
+        };
+
+        for (const auto& offset : possibleDoorPositions) {
+            int doorX = static_cast<int>(playerX) + offset.first;
+            int doorY = static_cast<int>(playerY) + offset.second;
+
+            // Проверяем, что позиция валидна и там нет других объектов
+            if (m_tileMap->isValidCoordinate(doorX, doorY) &&
+                m_tileMap->isTileWalkable(doorX, doorY)) {
+
+                // Создаем дверь
+                std::string doorName = "Door_" + std::to_string(doorX) + "_" + std::to_string(doorY);
+                createTestDoor(static_cast<float>(doorX), static_cast<float>(doorY), doorName);
+                break;
+            }
+        }
+    }
+}
+
+
+std::shared_ptr<Door> MapScene::createTestDoor(float x, float y, const std::string& name) {
+    // Создаем новую дверь с передачей указателя на текущую сцену и текущего биома
+    auto door = std::make_shared<Door>(name, m_tileMap.get(), this, m_currentBiome);
+
+    // Устанавливаем позицию
+    door->setPosition(x, y, 0.3f);
+
+    // Инициализируем дверь
+    if (!door->initialize()) {
+        LOG_ERROR("Failed to initialize door: " + name);
+        return nullptr;
+    }
+
+    // Добавляем дверь на сцену
+    addInteractiveObject(door);
+
+    // Генерируем описание биома для логов
+    std::string biomeDesc;
+    switch (m_currentBiome) {
+    case 1:
+        biomeDesc = "Forest (branches)";
+        break;
+    case 2:
+        biomeDesc = "Desert (sand pile)";
+        break;
+    case 3:
+        biomeDesc = "Tundra (ice barrier)";
+        break;
+    case 4:
+        biomeDesc = "Volcanic (rock pile)";
+        break;
+    default:
+        biomeDesc = "Unknown";
+        break;
+    }
+
+    LOG_INFO("Created " + biomeDesc + " obstacle: " + name + " at position (" +
+        std::to_string(x) + ", " + std::to_string(y) + ")");
+    return door;
+}
+
+void MapScene::rememberDoorPosition(int x, int y, const std::string& name) {
+    // Добавляем информацию об открытой двери в список
+    m_openDoors.push_back({ x, y, name });
+    LOG_INFO("Remembered open door " + name + " at position (" + std::to_string(x) + ", " + std::to_string(y) + ")");
+}
+
+bool MapScene::isOpenDoorTile(int x, int y) const {
+    // Проверяем, есть ли в списке открытая дверь с указанными координатами
+    for (const auto& doorInfo : m_openDoors) {
+        if (doorInfo.tileX == x && doorInfo.tileY == y) {
+            return true;
+        }
+    }
+    return false;
+}
+
+void MapScene::closeDoorAtPosition(int x, int y) {
+    // Ищем дверь с указанными координатами
+    for (auto it = m_openDoors.begin(); it != m_openDoors.end(); ++it) {
+        if (it->tileX == x && it->tileY == y) {
+            // Запоминаем имя двери
+            std::string doorName = it->name;
+
+            // Удаляем информацию об открытой двери из списка
+            m_openDoors.erase(it);
+
+            // Сначала меняем тип тайла на WALL, чтобы гарантировать непроходимость
+            if (m_tileMap) {
+                m_tileMap->setTileType(x, y, TileType::WALL);
+                LOG_DEBUG("Door tile updated to WALL before creating new door entity");
+            }
+
+            // Создаем новую дверь на этом месте
+            createTestDoor(static_cast<float>(x), static_cast<float>(y), doorName);
+
+            LOG_INFO("Closed door " + doorName + " at position (" + std::to_string(x) + ", " + std::to_string(y) + ")");
+            break;
+        }
+    }
+}
+
+void MapScene::forgetDoorPosition(int x, int y) {
+    // Ищем дверь с указанными координатами в списке открытых дверей
+    for (auto it = m_openDoors.begin(); it != m_openDoors.end(); ++it) {
+        if (it->tileX == x && it->tileY == y) {
+            LOG_INFO("Removed door " + it->name + " from open doors list");
+            m_openDoors.erase(it);
+            break;
+        }
+    }
 }

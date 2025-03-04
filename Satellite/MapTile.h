@@ -21,10 +21,10 @@ public:
     MapTile(TileType type);
 
     /**
-     * @brief Конструктор с полной инициализацией
+     * @brief Конструктор с указанием всех параметров
      * @param type Тип тайла
-     * @param walkable Признак проходимости
-     * @param transparent Признак прозрачности
+     * @param walkable Флаг проходимости
+     * @param transparent Флаг прозрачности
      * @param height Высота тайла
      */
     MapTile(TileType type, bool walkable, bool transparent, float height);

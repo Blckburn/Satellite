@@ -69,14 +69,14 @@ inline bool IsWalkable(TileType type) {
     case TileType::WOOD:
     case TileType::SAND:     // Песок проходим
     case TileType::SNOW:     // Снег проходим
+    case TileType::DOOR:     // Открытая дверь проходима
         return true;
     case TileType::EMPTY:
-    case TileType::WALL:
+    case TileType::WALL:     // Стена (и закрытая дверь) непроходима
     case TileType::WATER:    // Вода непроходима
     case TileType::GLASS:
     case TileType::OBSTACLE:
     case TileType::SPECIAL:  // Специальные тайлы могут быть как проходимыми, так и нет
-    case TileType::DOOR:     // Двери могут быть закрыты
     case TileType::ICE:      // Лед непроходим
     case TileType::ROCK_FORMATION: // Скалы непроходимы
     case TileType::LAVA:     // Лава непроходима
