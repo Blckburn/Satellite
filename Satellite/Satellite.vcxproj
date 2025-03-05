@@ -161,6 +161,7 @@
     <ClInclude Include="TileMap.h" />
     <ClInclude Include="TileRenderer.h" />
     <ClInclude Include="TileType.h" />
+    <ClInclude Include="WorldGenerator.h" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="Camera.cpp" />
@@ -182,6 +183,7 @@
     <ClCompile Include="TestScene.cpp" />
     <ClCompile Include="TileMap.cpp" />
     <ClCompile Include="TileRenderer.cpp" />
+    <ClCompile Include="WorldGenerator.cpp" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

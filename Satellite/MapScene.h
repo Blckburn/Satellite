@@ -11,12 +11,13 @@
 #include <memory>
 #include "InteractiveObject.h"
 #include "PickupItem.h"
-#include <vector>
 #include "Door.h" 
 #include "Terminal.h"
+#include <vector>
 
-// Forward declaration
+// Предварительное объявление классов
 class Engine;
+class WorldGenerator;
 
 /**
  * @brief Сцена для демонстрации системы тайлов и карты
@@ -65,7 +66,7 @@ public:
     void generateTestMap();
 
     /**
-     * @brief Получение карты
+     * @brief Получение карты сцены
      * @return Указатель на карту
      */
     TileMap* getMap() { return m_tileMap.get(); }
@@ -150,9 +151,9 @@ public:
     bool canMoveDiagonally(int fromX, int fromY, int toX, int toY);
 
     /**
-  * @brief Добавление интерактивного объекта на сцену
-  * @param object Указатель на интерактивный объект
-  */
+     * @brief Добавление интерактивного объекта на сцену
+     * @param object Указатель на интерактивный объект
+     */
     void addInteractiveObject(std::shared_ptr<InteractiveObject> object);
 
     /**
@@ -162,31 +163,11 @@ public:
     void removeInteractiveObject(std::shared_ptr<InteractiveObject> object);
 
     /**
-     * @brief Создание тестового предмета для подбора
-     * @param x X-координата
-     * @param y Y-координата
-     * @param name Имя предмета
-     * @param type Тип предмета
-     * @return Указатель на созданный предмет
-     */
-    std::shared_ptr<PickupItem> createTestPickupItem(float x, float y, const std::string& name, PickupItem::ItemType type);
-
-    /**
-     * @brief Создание тестовой двери
-     * @param x X-координата
-     * @param y Y-координата
+     * @brief Запоминает позицию открытой двери
+     * @param x X-координата двери
+     * @param y Y-координата двери
      * @param name Имя двери
-     * @return Указатель на созданную дверь
      */
-    std::shared_ptr<Door> createTestDoor(float x, float y, const std::string& name);
-
-
-    /**
- * @brief Запоминает позицию открытой двери
- * @param x X-координата двери
- * @param y Y-координата двери
- * @param name Имя двери
- */
     void rememberDoorPosition(int x, int y, const std::string& name);
 
     /**
@@ -205,68 +186,13 @@ public:
     void closeDoorAtPosition(int x, int y);
 
     /**
- * @brief Удаляет информацию о двери из списка открытых дверей
- * @param x X-координата двери
- * @param y Y-координата двери
- */
+     * @brief Удаляет информацию о двери из списка открытых дверей
+     * @param x X-координата двери
+     * @param y Y-координата двери
+     */
     void forgetDoorPosition(int x, int y);
 
-    /**
- * @brief Создание тестового терминала
- * @param x X-координата
- * @param y Y-координата
- * @param name Имя терминала
- * @param type Тип терминала
- * @return Указатель на созданный терминал
- */
-    std::shared_ptr<Terminal> createTestTerminal(float x, float y, const std::string& name, Terminal::TerminalType type);
-
-
-
-
 private:
-    std::vector<std::shared_ptr<InteractiveObject>> m_interactiveObjects;  ///< Интерактивные объекты на сцене
-    float m_interactionPromptTimer;                                        ///< Таймер для отображения подсказки
-    std::string m_interactionPrompt;                                       ///< Текст подсказки для взаимодействия
-    bool m_showInteractionPrompt;                                          ///< Флаг отображения подсказки
-    Engine* m_engine;                           ///< Указатель на движок
-    std::shared_ptr<TileMap> m_tileMap;         ///< Карта
-    std::shared_ptr<IsometricRenderer> m_isoRenderer; ///< Изометрический рендерер
-    std::shared_ptr<TileRenderer> m_tileRenderer;     ///< Рендерер тайлов
-    std::shared_ptr<Camera> m_camera;           ///< Камера
-    std::shared_ptr<Player> m_player;           ///< Игрок
-    std::shared_ptr<CollisionSystem> m_collisionSystem;  ///< Система коллизий
-
-    bool m_showDebug;                           ///< Флаг отображения отладочной информации
-    int m_currentBiome;                         ///< Текущий биом карты
-
-    // Структура для хранения информации об открытых дверях
-    struct OpenDoorInfo {
-        int tileX;          // X-координата двери
-        int tileY;          // Y-координата двери
-        std::string name;   // Имя двери
-    };
-
-    std::vector<OpenDoorInfo> m_openDoors;  ///< Список открытых дверей
-
-    /**
-    * @brief Указатель на текущую дверь, с которой идет взаимодействие
-    */
-    std::shared_ptr<Door> m_currentInteractingDoor;
-
-    /**
-     * @brief Флаг, показывающий, идет ли в данный момент взаимодействие с дверью
-     */
-    bool m_isInteractingWithDoor;
-
-    /**
- * @brief Генерирует двери в коридорах карты
- * @param doorProbability Вероятность размещения двери в подходящем месте (0.0-1.0)
- * @param maxDoors Максимальное количество дверей для генерации
- */
-    void generateDoors(float doorProbability = 0.4f, int maxDoors = 8);
-
-
     /**
      * @brief Сокращает длинный текст, если он превышает максимальную длину
      * @param text Исходный текст
@@ -274,7 +200,6 @@ private:
      * @return Сокращенный текст или исходный текст, если он короче maxLength
      */
     std::string truncateText(const std::string& text, size_t maxLength);
-
 
     /**
      * @brief Обработка взаимодействия с объектами
@@ -304,14 +229,46 @@ private:
     void renderInteractionPrompt(SDL_Renderer* renderer);
 
     /**
-    * @brief Создает интерактивные предметы на карте
-    */
-    void createInteractiveItems();
+     * @brief Отрисовка информации терминала
+     * @param renderer SDL рендерер
+     */
+    void renderTerminalInfo(SDL_Renderer* renderer);
+
+private:
+    std::shared_ptr<WorldGenerator> m_worldGenerator;  ///< Генератор игрового мира
+    std::vector<std::shared_ptr<InteractiveObject>> m_interactiveObjects;  ///< Интерактивные объекты на сцене
+    float m_interactionPromptTimer;                    ///< Таймер для отображения подсказки
+    std::string m_interactionPrompt;                   ///< Текст подсказки для взаимодействия
+    bool m_showInteractionPrompt;                      ///< Флаг отображения подсказки
+    Engine* m_engine;                                  ///< Указатель на движок
+    std::shared_ptr<TileMap> m_tileMap;                ///< Карта
+    std::shared_ptr<IsometricRenderer> m_isoRenderer;  ///< Изометрический рендерер
+    std::shared_ptr<TileRenderer> m_tileRenderer;      ///< Рендерер тайлов
+    std::shared_ptr<Camera> m_camera;                  ///< Камера
+    std::shared_ptr<Player> m_player;                  ///< Игрок
+    std::shared_ptr<CollisionSystem> m_collisionSystem;///< Система коллизий
+
+    bool m_showDebug;                                  ///< Флаг отображения отладочной информации
+    int m_currentBiome;                                ///< Текущий биом карты
+
+    // Структура для хранения информации об открытых дверях
+    struct OpenDoorInfo {
+        int tileX;          // X-координата двери
+        int tileY;          // Y-координата двери
+        std::string name;   // Имя двери
+    };
+
+    std::vector<OpenDoorInfo> m_openDoors;             ///< Список открытых дверей
 
     /**
- * @brief Создает интерактивные терминалы на карте
- */
-    void createTerminals();
+    * @brief Указатель на текущую дверь, с которой идет взаимодействие
+    */
+    std::shared_ptr<Door> m_currentInteractingDoor;
+
+    /**
+     * @brief Флаг, показывающий, идет ли в данный момент взаимодействие с дверью
+     */
+    bool m_isInteractingWithDoor;
 
     /**
      * @brief Указатель на текущий терминал, с которым идет взаимодействие
@@ -322,24 +279,4 @@ private:
      * @brief Флаг, показывающий, отображается ли сейчас информация терминала
      */
     bool m_isDisplayingTerminalInfo;
-
-    /**
-     * @brief Отрисовка информации терминала
-     * @param renderer SDL рендерер
-     */
-    void renderTerminalInfo(SDL_Renderer* renderer);
-
-    /**
- * @brief Находит все углы комнат на карте
- * @return Вектор пар координат углов комнат
- */
-    std::vector<std::pair<int, int>> findRoomCorners();
-
-    /**
-     * @brief Запасной метод для случайного размещения терминала
-     * @param terminalType Тип терминала для создания
-     * @param terminalName Имя терминала
-     */
-    void placeTerminalRandomly(Terminal::TerminalType terminalType, const std::string& terminalName);
-
 };
