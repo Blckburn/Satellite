@@ -152,6 +152,14 @@ void MapScene::handleEvent(const SDL_Event& event) {
         m_player->handleEvent(event);
     }
 
+    // Получаем позицию игрока для дополнительной информации ДО switch
+    float playerX = 0.0f;
+    float playerY = 0.0f;
+    if (m_player) {
+        playerX = m_player->getFullX();
+        playerY = m_player->getFullY();
+    }
+
     // Обработка клавиатурных событий
     if (event.type == SDL_KEYDOWN) {
         switch (event.key.keysym.sym) {
@@ -168,11 +176,42 @@ void MapScene::handleEvent(const SDL_Event& event) {
         case SDLK_F1:
             // Переключение режима отладки
             m_showDebug = !m_showDebug;
+            LOG_DEBUG("Debug mode: " + std::string(m_showDebug ? "enabled" : "disabled"));
             break;
 
         case SDLK_e:
+            // ОТЛАДКА - проверяем состояние всех дверей
+            LOG_DEBUG("==== E KEY PRESSED - DOOR STATUS CHECK ====");
+
+            LOG_DEBUG("Player position: (" + std::to_string(playerX) + ", " +
+                std::to_string(playerY) + ")");
+
+            // Проверяем состояние всех дверей
+            for (auto& obj : m_entityManager->getInteractiveObjects()) {
+                if (auto doorObj = std::dynamic_pointer_cast<Door>(obj)) {
+                    float doorX = doorObj->getPosition().x;
+                    float doorY = doorObj->getPosition().y;
+                    float dx = doorX - playerX;
+                    float dy = doorY - playerY;
+                    float distanceSq = dx * dx + dy * dy;
+                    float radius = doorObj->getInteractionRadius();
+
+                    LOG_DEBUG("Door: " + doorObj->getName() +
+                        ", Position: (" + std::to_string(doorX) + ", " + std::to_string(doorY) + ")" +
+                        ", Distance: " + std::to_string(sqrt(distanceSq)) +
+                        ", Radius: " + std::to_string(radius) +
+                        ", IsOpen: " + std::string(doorObj->isOpen() ? "true" : "false") +
+                        ", IsActive: " + std::string(doorObj->isActive() ? "true" : "false") +
+                        ", IsInteractable: " + std::string(doorObj->isInteractable() ? "true" : "false") +
+                        ", In range: " + std::string(distanceSq <= radius * radius ? "YES" : "NO"));
+                }
+            }
+
             // Обработка взаимодействия через InteractionSystem
-            m_interactionSystem->handleInteraction();
+            LOG_DEBUG("Calling InteractionSystem::handleInteraction()");
+            if (m_interactionSystem) {
+                m_interactionSystem->handleInteraction();
+            }
             break;
 
         case SDLK_ESCAPE:
@@ -186,22 +225,17 @@ void MapScene::handleEvent(const SDL_Event& event) {
             break;
         }
     }
-    // Добавляем обработку отпускания клавиши E для системы каст-времени с дверями
+    // Обработка отпускания клавиши E
     else if (event.type == SDL_KEYUP && event.key.keysym.sym == SDLK_e) {
-        // Проверяем, есть ли текущие взаимодействия с дверями
+        LOG_DEBUG("E key released, resetting key release requirement");
+        // Проверяем, есть ли текущие взаимодействия с дверями через EntityManager
         for (auto& obj : m_entityManager->getInteractiveObjects()) {
             if (auto doorObj = std::dynamic_pointer_cast<Door>(obj)) {
                 if (doorObj->isRequiringKeyRelease()) {
+                    LOG_DEBUG("Resetting key release requirement for door: " + doorObj->getName());
                     doorObj->resetKeyReleaseRequirement();
                 }
             }
-        }
-    }
-
-    // Обработка нажатия клавиши E
-    if (event.type == SDL_KEYDOWN && event.key.keysym.sym == SDLK_e) {
-        if (m_interactionSystem) {
-            m_interactionSystem->handleInteraction();
         }
     }
 
@@ -224,6 +258,38 @@ void MapScene::update(float deltaTime) {
 
     // 4. Обновление всех сущностей через EntityManager
     m_entityManager->update(deltaTime);
+
+    // НОВЫЙ КОД: Периодическая проверка и обновление состояния дверей
+    static float doorCheckTimer = 0.0f;
+    doorCheckTimer += deltaTime;
+
+    if (doorCheckTimer >= 1.0f) {  // Проверка раз в секунду
+        doorCheckTimer = 0.0f;
+
+        for (auto& obj : m_entityManager->getInteractiveObjects()) {
+            if (auto doorObj = std::dynamic_pointer_cast<Door>(obj)) {
+                // Проверяем, что дверь активна и интерактивна
+                if (!doorObj->isActive() || !doorObj->isInteractable()) {
+                    LOG_WARNING("Found inactive/non-interactable door: " + doorObj->getName() +
+                        ", fixing...");
+                    doorObj->setActive(true);
+                    doorObj->setInteractable(true);
+                }
+
+                // Проверяем, что радиус взаимодействия двери корректный
+                if (doorObj->getInteractionRadius() < 1.5f) {
+                    LOG_WARNING("Door has small interaction radius: " + doorObj->getName());
+                    doorObj->setInteractionRadius(1.8f);
+                }
+
+                // Обновляем подсказку для соответствия состоянию
+                if (doorObj->isOpen()) {
+                    // Убедимся, что у открытой двери правильная подсказка
+                    doorObj->updateInteractionHint();
+                }
+            }
+        }
+    }
 
     // Проверка удержания клавиши E для взаимодействия с дверями
     const Uint8* keyState = SDL_GetKeyboardState(NULL);
@@ -258,10 +324,10 @@ void MapScene::render(SDL_Renderer* renderer) {
 }
 
 void MapScene::initializeDoors() {
-    // Проходим по всем интерактивным объектам, полученным через EntityManager
+    // Проходим по всем интерактивным объектам через EntityManager
     for (auto& obj : m_entityManager->getInteractiveObjects()) {
         if (auto doorObj = std::dynamic_pointer_cast<Door>(obj)) {
-            // Устанавливаем систему взаимодействия для каждой двери
+            // Установка системы взаимодействия для каждой двери
             doorObj->setInteractionSystem(m_interactionSystem.get());
             LOG_DEBUG("Door '" + doorObj->getName() + "' initialized with InteractionSystem");
         }

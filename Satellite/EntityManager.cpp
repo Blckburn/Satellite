@@ -2,6 +2,7 @@
 #include "Logger.h"
 #include <algorithm>
 #include <cmath>
+#include "Door.h"
 
 EntityManager::EntityManager(std::shared_ptr<TileMap> tileMap)
     : m_tileMap(tileMap) {
@@ -108,61 +109,78 @@ void EntityManager::removeInteractiveObject(std::shared_ptr<InteractiveObject> o
 }
 
 std::shared_ptr<InteractiveObject> EntityManager::findNearestInteractiveObject(
-    float playerX, float playerY, float playerDirX, float playerDirY) {
+    float playerX, float playerY, float directionX, float directionY) {
 
-    std::shared_ptr<InteractiveObject> nearest = nullptr;
-    float minDistanceSquared = std::numeric_limits<float>::max();
+    // ОТЛАДКА
+    LOG_DEBUG("Looking for nearest interactive object at position (" +
+        std::to_string(playerX) + ", " + std::to_string(playerY) + ")");
 
-    // Если направление не определено (игрок стоит на месте), будет учитываться любое направление
-    bool hasDirection = (std::abs(playerDirX) > 0.01f || std::abs(playerDirY) > 0.01f);
+    // НОВЫЙ КОД: Сначала ищем ОТКРЫТЫЕ двери поблизости с приоритетом
+    for (auto& obj : m_interactiveObjects) {
+        if (auto doorObj = std::dynamic_pointer_cast<Door>(obj)) {
+            if (doorObj->isOpen() && doorObj->isActive() && doorObj->isInteractable()) {
+                float objX = doorObj->getPosition().x;
+                float objY = doorObj->getPosition().y;
 
-    for (auto& object : m_interactiveObjects) {
-        if (!object->isActive() || !object->isInteractable()) continue;
+                float dx = objX - playerX;
+                float dy = objY - playerY;
+                float distanceSquared = dx * dx + dy * dy;
+                float radius = doorObj->getInteractionRadius();
 
-        // Координаты объекта
-        float objectX = object->getPosition().x;
-        float objectY = object->getPosition().y;
-
-        // Вычисление вектора от игрока к объекту
-        float dx = objectX - playerX;
-        float dy = objectY - playerY;
-        float distanceSquared = dx * dx + dy * dy;
-
-        // Получение радиуса взаимодействия объекта
-        float interactionRadius = object->getInteractionRadius();
-        float radiusSquared = interactionRadius * interactionRadius;
-
-        // Если объект находится в радиусе взаимодействия
-        if (distanceSquared <= radiusSquared) {
-            // Проверяем угол между направлением игрока и направлением к объекту,
-            // если у игрока есть направление движения
-            bool objectInFront = true; // По умолчанию считаем, что объект перед игроком
-
-            if (hasDirection) {
-                // Нормализуем вектор направления к объекту
-                float length = std::sqrt(distanceSquared);
-                if (length > 0.0001f) { // Избегаем деления на ноль
-                    float normDx = dx / length;
-                    float normDy = dy / length;
-
-                    // Вычисляем скалярное произведение (dot product) между направлением игрока
-                    // и нормализованным вектором направления к объекту
-                    float dotProduct = playerDirX * normDx + playerDirY * normDy;
-
-                    // Используем более узкий сектор для точности выбора объекта
-                    objectInFront = dotProduct > 0.5f; // Примерно 60 градусов в каждую сторону
+                if (distanceSquared <= radius * radius) {
+                    LOG_DEBUG("Found OPEN door in range: " + doorObj->getName());
+                    return doorObj;
                 }
-            }
-
-            // Если объект находится перед игроком и ближе предыдущего ближайшего
-            if (objectInFront && distanceSquared < minDistanceSquared) {
-                minDistanceSquared = distanceSquared;
-                nearest = object;
             }
         }
     }
 
-    return nearest;
+    // Стандартный поиск всех интерактивных объектов
+    std::shared_ptr<InteractiveObject> nearestObject = nullptr;
+    float minDistanceSquared = std::numeric_limits<float>::max();
+
+    int countChecked = 0;
+    int countInRange = 0;
+
+    // Проходим по всем интерактивным объектам
+    for (auto& obj : m_interactiveObjects) {
+        countChecked++;
+
+        if (!obj->isActive() || !obj->isInteractable()) {
+            continue;
+        }
+
+        float objX = obj->getPosition().x;
+        float objY = obj->getPosition().y;
+
+        float dx = objX - playerX;
+        float dy = objY - playerY;
+        float distanceSquared = dx * dx + dy * dy;
+
+        // Получаем радиус взаимодействия
+        float interactionRadius = 1.0f; // Значение по умолчанию
+        if (auto interactiveObj = std::dynamic_pointer_cast<InteractiveObject>(obj)) {
+            interactionRadius = interactiveObj->getInteractionRadius();
+        }
+
+        // Проверяем, находится ли объект в пределах радиуса
+        if (distanceSquared <= interactionRadius * interactionRadius) {
+            countInRange++;
+
+            // Если это первый найденный объект или он ближе предыдущего ближайшего
+            if (!nearestObject || distanceSquared < minDistanceSquared) {
+                nearestObject = std::dynamic_pointer_cast<InteractiveObject>(obj);
+                minDistanceSquared = distanceSquared;
+            }
+        }
+    }
+
+    // ОТЛАДКА
+    LOG_DEBUG("Checked " + std::to_string(countChecked) + " objects, found " +
+        std::to_string(countInRange) + " in range, nearest: " +
+        (nearestObject ? nearestObject->getName() : "none"));
+
+    return nearestObject;
 }
 
 void EntityManager::clear() {

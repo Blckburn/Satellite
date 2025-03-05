@@ -23,118 +23,133 @@ void InteractionSystem::handleInteraction() {
 
     // Если уже идет взаимодействие с дверью, не ищем новые объекты
     if (m_isInteractingWithDoor && m_currentInteractingDoor) {
-        // Продолжаем текущее взаимодействие
+        LOG_DEBUG("Already interacting with door: " + m_currentInteractingDoor->getName());
         return;
     }
+
+    // Более подробная диагностика поиска объектов
+    LOG_DEBUG("Searching for interactive objects at position (" +
+        std::to_string(playerX) + ", " + std::to_string(playerY) + ")");
 
     std::shared_ptr<InteractiveObject> nearestObject = m_entityManager->findNearestInteractiveObject(
         playerX, playerY, playerDirX, playerDirY);
 
-    // Если уже отображается информация терминала и найден ближайший объект
-    if (m_isDisplayingTerminalInfo && m_currentInteractingTerminal && nearestObject) {
-        // Проверяем, является ли ближайший объект текущим терминалом
-        if (nearestObject.get() == m_currentInteractingTerminal.get()) {
-            // Закрываем окно терминала при повторном нажатии E
-            m_isDisplayingTerminalInfo = false;
-            m_currentInteractingTerminal = nullptr;
-            LOG_INFO("Terminal info closed by pressing E again");
-            return;
-        }
-    }
+    if (nearestObject) {
+        LOG_DEBUG("Found nearest object: " + nearestObject->getName() +
+            ", isInteractable: " + std::string(nearestObject->isInteractable() ? "true" : "false"));
 
-    if (nearestObject && nearestObject->isInteractable()) {
-        // Проверяем, является ли объект дверью
-        if (auto doorObj = std::dynamic_pointer_cast<Door>(nearestObject)) {
-            // Начинаем процесс взаимодействия с дверью (с каст-временем)
-            if (doorObj->startInteraction()) {
-                m_currentInteractingDoor = doorObj;
-                m_isInteractingWithDoor = true;
-                LOG_INFO("Started interaction process with door " + doorObj->getName());
+        // Если отображается информация терминала и найден ближайший объект
+        if (m_isDisplayingTerminalInfo && m_currentInteractingTerminal && nearestObject) {
+            // Проверяем, является ли ближайший объект текущим терминалом
+            if (nearestObject.get() == m_currentInteractingTerminal.get()) {
+                // Закрываем окно терминала при повторном нажатии E
+                m_isDisplayingTerminalInfo = false;
+                m_currentInteractingTerminal = nullptr;
+                LOG_INFO("Terminal info closed by pressing E again");
+                return;
             }
         }
-        // Проверяем, является ли объект терминалом
-        else if (auto terminalObj = std::dynamic_pointer_cast<Terminal>(nearestObject)) {
-            // Начинаем отображение информации терминала
-            if (terminalObj->interact(m_player.get())) {
-                m_currentInteractingTerminal = terminalObj;
-                m_isDisplayingTerminalInfo = true;
-                LOG_INFO("Started displaying information from terminal " + terminalObj->getName());
 
-                // Формируем сообщение о взаимодействии
-                std::string actionMessage = "Accessing " + nearestObject->getName();
+        if (nearestObject->isInteractable()) {
+            // Проверяем, является ли объект дверью
+            if (auto doorObj = std::dynamic_pointer_cast<Door>(nearestObject)) {
+                LOG_DEBUG("Door object found: " + doorObj->getName() +
+                    ", isOpen: " + std::string(doorObj->isOpen() ? "true" : "false"));
 
-                // Отображаем подсказку с результатом взаимодействия
-                m_showInteractionPrompt = true;
-                m_interactionPromptTimer = 0.0f;
-                m_interactionPrompt = actionMessage;
-            }
-        }
-        else {
-            // Для других объектов используем обычное мгновенное взаимодействие
-            if (nearestObject->interact(m_player.get())) {
-                // Взаимодействие успешно
-                LOG_INFO("Interaction with " + nearestObject->getName() + " successful");
-
-                // Формируем сообщение о взаимодействии в зависимости от типа объекта
-                std::string actionMessage;
-
-                if (auto pickupItem = std::dynamic_pointer_cast<PickupItem>(nearestObject)) {
-                    // Для предметов
-                    PickupItem::ItemType itemType = pickupItem->getItemType();
-                    std::string itemTypeStr;
-
-                    switch (itemType) {
-                    case PickupItem::ItemType::RESOURCE:
-                        itemTypeStr = " [Resource]";
-                        break;
-                    case PickupItem::ItemType::WEAPON:
-                        itemTypeStr = " [Weapon]";
-                        break;
-                    case PickupItem::ItemType::ARMOR:
-                        itemTypeStr = " [Armor]";
-                        break;
-                    case PickupItem::ItemType::CONSUMABLE:
-                        itemTypeStr = " [Consumable]";
-                        break;
-                    case PickupItem::ItemType::KEY:
-                        itemTypeStr = " [Key]";
-                        break;
-                    default:
-                        itemTypeStr = " [Item]";
-                        break;
-                    }
-
-                    actionMessage = "Picked up " + nearestObject->getName() + itemTypeStr;
+                // Начинаем процесс взаимодействия с дверью (с каст-временем)
+                if (doorObj->startInteraction()) {
+                    m_currentInteractingDoor = doorObj;
+                    m_isInteractingWithDoor = true;
+                    LOG_INFO("Started interaction process with door " + doorObj->getName());
                 }
                 else {
-                    // Для других интерактивных объектов
-                    switch (nearestObject->getInteractiveType()) {
-                    case InteractiveType::SWITCH:
-                        actionMessage = "Activated " + nearestObject->getName();
-                        break;
-                    case InteractiveType::TERMINAL:
-                        actionMessage = "Used " + nearestObject->getName();
-                        break;
-                    case InteractiveType::CONTAINER:
-                        actionMessage = "Opened " + nearestObject->getName();
-                        break;
-                    default:
-                        actionMessage = "Interacted with " + nearestObject->getName();
-                        break;
-                    }
+                    LOG_DEBUG("Door::startInteraction() returned false - interaction blocked");
                 }
+            }
+            // Проверяем, является ли объект терминалом
+            else if (auto terminalObj = std::dynamic_pointer_cast<Terminal>(nearestObject)) {
+                // Начинаем отображение информации терминала
+                if (terminalObj->interact(m_player.get())) {
+                    m_currentInteractingTerminal = terminalObj;
+                    m_isDisplayingTerminalInfo = true;
+                    LOG_INFO("Started displaying information from terminal " + terminalObj->getName());
 
-                // Отображаем подсказку с результатом взаимодействия
-                m_showInteractionPrompt = true;
-                m_interactionPromptTimer = 0.0f;
-                m_interactionPrompt = actionMessage;
+                    // Формируем сообщение о взаимодействии
+                    std::string actionMessage = "Accessing " + nearestObject->getName();
+
+                    // Отображаем подсказку с результатом взаимодействия
+                    m_showInteractionPrompt = true;
+                    m_interactionPromptTimer = 0.0f;
+                    m_interactionPrompt = actionMessage;
+                }
+            }
+            else {
+                // Для других объектов используем обычное мгновенное взаимодействие
+                if (nearestObject->interact(m_player.get())) {
+                    // Взаимодействие успешно
+                    LOG_INFO("Interaction with " + nearestObject->getName() + " successful");
+
+                    // Формируем сообщение о взаимодействии в зависимости от типа объекта
+                    std::string actionMessage;
+
+                    if (auto pickupItem = std::dynamic_pointer_cast<PickupItem>(nearestObject)) {
+                        // Для предметов
+                        PickupItem::ItemType itemType = pickupItem->getItemType();
+                        std::string itemTypeStr;
+
+                        switch (itemType) {
+                        case PickupItem::ItemType::RESOURCE:
+                            itemTypeStr = " [Resource]";
+                            break;
+                        case PickupItem::ItemType::WEAPON:
+                            itemTypeStr = " [Weapon]";
+                            break;
+                        case PickupItem::ItemType::ARMOR:
+                            itemTypeStr = " [Armor]";
+                            break;
+                        case PickupItem::ItemType::CONSUMABLE:
+                            itemTypeStr = " [Consumable]";
+                            break;
+                        case PickupItem::ItemType::KEY:
+                            itemTypeStr = " [Key]";
+                            break;
+                        default:
+                            itemTypeStr = " [Item]";
+                            break;
+                        }
+
+                        actionMessage = "Picked up " + nearestObject->getName() + itemTypeStr;
+                    }
+                    else {
+                        // Для других интерактивных объектов
+                        switch (nearestObject->getInteractiveType()) {
+                        case InteractiveType::SWITCH:
+                            actionMessage = "Activated " + nearestObject->getName();
+                            break;
+                        case InteractiveType::TERMINAL:
+                            actionMessage = "Used " + nearestObject->getName();
+                            break;
+                        case InteractiveType::CONTAINER:
+                            actionMessage = "Opened " + nearestObject->getName();
+                            break;
+                        default:
+                            actionMessage = "Interacted with " + nearestObject->getName();
+                            break;
+                        }
+                    }
+
+                    // Отображаем подсказку с результатом взаимодействия
+                    m_showInteractionPrompt = true;
+                    m_interactionPromptTimer = 0.0f;
+                    m_interactionPrompt = actionMessage;
+                }
             }
         }
     }
     else {
         LOG_INFO("No interactive objects in range");
     }
-}
+} 
 
 void InteractionSystem::update(float deltaTime) {
     // Проверяем состояние текущего взаимодействия с дверью
@@ -360,6 +375,9 @@ std::string InteractionSystem::truncateText(const std::string& text, size_t maxL
 void InteractionSystem::updateInteraction(float deltaTime) {
     // Проверяем, идет ли взаимодействие с дверью
     if (m_isInteractingWithDoor && m_currentInteractingDoor) {
+        LOG_DEBUG("Updating door interaction, current progress: " +
+            std::to_string(m_currentInteractingDoor->getInteractionProgress() * 100) + "%");
+
         // Обновляем время взаимодействия
         float currentProgress = m_currentInteractingDoor->getInteractionProgress();
         float newProgress = currentProgress + deltaTime / m_currentInteractingDoor->getInteractionRequiredTime();
@@ -367,17 +385,27 @@ void InteractionSystem::updateInteraction(float deltaTime) {
         // Обновляем прогресс
         m_currentInteractingDoor->updateInteractionProgress(newProgress);
 
-        // Добавим логирование для отладки
-        if (static_cast<int>(newProgress * 100) % 10 == 0 &&
-            static_cast<int>(currentProgress * 100) / 10 != static_cast<int>(newProgress * 100) / 10) {
-            LOG_DEBUG("Door interaction progress: " + std::to_string(newProgress * 100) + "%");
-        }
-
         // Если достигли 100%, завершаем взаимодействие
         if (newProgress >= 1.0f) {
+            LOG_DEBUG("Door interaction completed, finalizing...");
             m_currentInteractingDoor->completeInteraction();
             m_isInteractingWithDoor = false;
+
+            // ВАЖНО: Не обнуляем указатель на дверь здесь, чтобы не потерять референс
+            // Иначе есть риск, что дверь будет удалена и станет недоступной
+
+            // Проверяем, что дверь осталась интерактивной
+            if (m_currentInteractingDoor && !m_currentInteractingDoor->isInteractable()) {
+                LOG_WARNING("Door became non-interactable after interaction, fixing...");
+                m_currentInteractingDoor->setInteractable(true);
+            }
+
+            // Только теперь очищаем указатель после всех проверок
             m_currentInteractingDoor = nullptr;
         }
+    }
+    else if (m_isInteractingWithDoor && !m_currentInteractingDoor) {
+        LOG_ERROR("Interaction flag set but door pointer is null!");
+        m_isInteractingWithDoor = false;
     }
 }

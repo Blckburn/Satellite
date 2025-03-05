@@ -152,6 +152,17 @@ public:
     */
     void completeInteraction();
 
+    /**
+ * @brief Обновляет подсказку во время процесса взаимодействия
+ */
+    void updateInteractionHintDuringCast();
+
+
+    /**
+  * @brief Обновляет подсказку для взаимодействия в зависимости от биома и состояния
+  */
+    void updateInteractionHint();
+
 
 private:
     /**
@@ -159,15 +170,9 @@ private:
      */
     void updateTileWalkability();
 
-    /**
-     * @brief Обновляет подсказку для взаимодействия в зависимости от биома и состояния
-     */
-    void updateInteractionHint();
+ 
 
-    /**
-     * @brief Обновляет подсказку во время процесса взаимодействия
-     */
-    void updateInteractionHintDuringCast();
+
 
    
 

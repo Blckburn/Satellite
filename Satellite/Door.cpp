@@ -141,11 +141,17 @@ void Door::update(float deltaTime) {
     // Базовое обновление интерактивного объекта
     InteractiveObject::update(deltaTime);
 
+    // УЛУЧШЕННАЯ ОБРАБОТКА КУЛДАУНА
     // Обновление кулдауна после завершения действия
     if (m_actionJustCompleted) {
+        // Уменьшаем таймер кулдауна
         m_cooldownTimer -= deltaTime;
+
+        // Если кулдаун завершен, сбрасываем флаг завершения действия
         if (m_cooldownTimer <= 0.0f) {
             m_actionJustCompleted = false;
+            m_cooldownTimer = 0.0f;
+            LOG_DEBUG("Door cooldown finished for: " + getName());
         }
     }
 
@@ -169,6 +175,19 @@ void Door::update(float deltaTime) {
         // Если процесс завершен
         if (m_interactionProgress >= 1.0f) {
             completeInteraction();
+        }
+    }
+
+    // Добавляем периодическую проверку интерактивности
+    static float checkTimer = 0.0f;
+    checkTimer += deltaTime;
+
+    if (checkTimer > 1.0f) {  // Проверяем каждую секунду
+        checkTimer = 0.0f;
+
+        if (!isInteractable()) {
+            LOG_WARNING("Door found to be non-interactable during update: " + getName());
+            setInteractable(true);  // Принудительное восстановление интерактивности
         }
     }
 }
@@ -253,30 +272,51 @@ bool Door::interact(Player* player) {
 }
 
 bool Door::startInteraction() {
-    // Если требуется отпустить клавишу, запрещаем новое взаимодействие
+    // Подробный диагностический вывод текущего состояния двери
+    LOG_DEBUG("Door::startInteraction() - Name: " + getName() +
+        ", isOpen: " + std::string(m_isOpen ? "true" : "false") +
+        ", isInteractable: " + std::string(isInteractable() ? "true" : "false") +
+        ", requireKeyRelease: " + std::string(m_requireKeyRelease ? "true" : "false") +
+        ", actionJustCompleted: " + std::string(m_actionJustCompleted ? "true" : "false") +
+        ", isInteracting: " + std::string(m_isInteracting ? "true" : "false") +
+        ", cooldownTimer: " + std::to_string(m_cooldownTimer));
+
+    // УПРОЩЕННЫЕ ПРОВЕРКИ
+
+    // 1. Первая проверка - должна ли быть отпущена клавиша перед новым взаимодействием
     if (m_requireKeyRelease) {
+        LOG_DEBUG("Interaction blocked: key release required first");
         return false;
     }
 
-    // Если действие только что завершилось и идет кулдаун, запрещаем новое взаимодействие
+    // 2. Проверка на кулдаун
     if (m_actionJustCompleted) {
+        LOG_DEBUG("Interaction blocked: action just completed, in cooldown");
         return false;
     }
 
-    // Если уже идет взаимодействие, просто продолжаем его
+    // 3. Проверка, не идет ли уже взаимодействие
     if (m_isInteracting) {
+        LOG_DEBUG("Door already interacting, continue interaction");
         return true;
+    }
+
+    // Аварийная проверка - дверь должна быть интерактивной
+    if (!isInteractable()) {
+        LOG_WARNING("Door was not interactable! Forcing interactable flag to true.");
+        setInteractable(true);
     }
 
     // Начинаем процесс взаимодействия
     m_isInteracting = true;
-    m_interactionTimer = 0.0f;  // Явно сбрасываем таймер
+    m_interactionTimer = 0.0f;
     m_interactionProgress = 0.0f;
 
     // Обновляем подсказку для отображения процесса
     updateInteractionHintDuringCast();
 
-    LOG_INFO("Started " + std::string(m_isOpen ? "closing" : "opening") + " interaction with door " + getName());
+    LOG_INFO("Started " + std::string(m_isOpen ? "closing" : "opening") +
+        " interaction with door " + getName());
 
     return true;
 }
@@ -301,12 +341,22 @@ void Door::completeInteraction() {
     // Завершаем процесс взаимодействия
     m_isInteracting = false;
     m_interactionTimer = 0.0f;
+    m_interactionProgress = 0.0f;
 
-    // Устанавливаем флаг завершения действия для предотвращения автоповтора
+    // Сохраняем текущие координаты для проверки
+    float oldX = getPosition().x;
+    float oldY = getPosition().y;
+    float oldZ = getPosition().z;
+
+    // ВАЖНО - обязательно устанавливаем интерактивность
+    setInteractable(true);
+    setActive(true);
+
+    // Стандартный кулдаун 0.5 секунды
     m_actionJustCompleted = true;
-    m_cooldownTimer = 0.5f; // Полсекунды кулдауна
+    m_cooldownTimer = 0.5f;
 
-    // Устанавливаем флаг требования отпустить клавишу перед новым взаимодействием
+    // ВАЖНО - требуем отпускания клавиши перед следующим взаимодействием
     m_requireKeyRelease = true;
 
     // Меняем состояние двери
@@ -323,7 +373,7 @@ void Door::completeInteraction() {
                 openColor.a = 128; // Полупрозрачная
                 setColor(openColor);
 
-                // Уведомляем ТОЛЬКО через InteractionSystem, НЕ используем m_parentScene
+                // Уведомляем систему взаимодействия
                 if (m_interactionSystem) {
                     m_interactionSystem->rememberDoorPosition(m_tileX, m_tileY, getName());
                 }
@@ -336,7 +386,7 @@ void Door::completeInteraction() {
                 // Визуально "закрываем" дверь
                 setColor(m_closedColor);
 
-                // Уведомляем ТОЛЬКО через InteractionSystem, НЕ используем m_parentScene
+                // Уведомляем систему взаимодействия
                 if (m_interactionSystem) {
                     m_interactionSystem->forgetDoorPosition(m_tileX, m_tileY);
                 }
@@ -344,10 +394,33 @@ void Door::completeInteraction() {
         }
     }
 
+    // НОВЫЙ КОД: Проверка и восстановление позиции, если она изменилась
+    if (getPosition().x != oldX || getPosition().y != oldY || getPosition().z != oldZ) {
+        LOG_WARNING("Door position changed during interaction! Fixing...");
+        setPosition(oldX, oldY, oldZ);
+    }
+
+    // НОВЫЙ КОД: Принудительно устанавливаем точную позицию двери на основе тайловых координат
+    setPosition(static_cast<float>(m_tileX), static_cast<float>(m_tileY), getPosition().z);
+
+    // НОВЫЙ КОД: Принудительно обновляем радиус взаимодействия
+    setInteractionRadius(1.8f);
+
     // Обновляем подсказку для нового состояния
     updateInteractionHint();
 
-    LOG_INFO("Door " + getName() + " interaction completed, now " + (m_isOpen ? "open" : "closed"));
+    LOG_INFO("Door " + getName() + " interaction completed, now " +
+        (m_isOpen ? "open" : "closed") + ", position: (" +
+        std::to_string(getPosition().x) + ", " +
+        std::to_string(getPosition().y) + ")");
+
+    // Дополнительный диагностический вывод
+    LOG_DEBUG("Door state after completion - Name: " + getName() +
+        ", isOpen: " + std::string(m_isOpen ? "true" : "false") +
+        ", isInteractable: " + std::string(isInteractable() ? "true" : "false") +
+        ", isActive: " + std::string(isActive() ? "true" : "false") +
+        ", requireKeyRelease: " + std::string(m_requireKeyRelease ? "true" : "false") +
+        ", actionJustCompleted: " + std::string(m_actionJustCompleted ? "true" : "false"));
 }
 
 void Door::updateInteractionProgress(float progress) {
