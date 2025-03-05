@@ -146,6 +146,13 @@ public:
     void updateInteraction(float deltaTime);
 
 
+    // Добавляем новый метод для обработки отпускания клавиш
+/**
+ * @brief Уведомление о отпускании клавиши
+ * @param scancode Код клавиши
+ */
+    void notifyKeyReleased(SDL_Scancode scancode);
+
 private:
     std::shared_ptr<Player> m_player;                  ///< Указатель на игрока
     std::shared_ptr<EntityManager> m_entityManager;    ///< Указатель на менеджер сущностей

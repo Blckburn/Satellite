@@ -11,7 +11,7 @@
 
 
 MapScene::MapScene(const std::string& name, Engine* engine)
-    : Scene(name), m_engine(engine), m_showDebug(false) {
+    : Scene(name), m_engine(engine), m_showDebug(false), m_waitingForKeyRelease(false) {
     // Остальные члены будут инициализированы в методе initialize()
 }
 
@@ -181,6 +181,12 @@ void MapScene::handleEvent(const SDL_Event& event) {
 
         case SDLK_e:
         {
+            // НОВОЕ: Глобальная блокировка взаимодействия до полного отпускания клавиши
+            if (m_waitingForKeyRelease) {
+                LOG_DEBUG("Blocking E key interaction until key is fully released");
+                break; // Блокируем всю обработку, пока клавиша не будет отпущена
+            }
+
             // ВАЖНЫЙ ФИХ: Проверяем, идет ли уже взаимодействие с дверью
             bool alreadyInteracting = false;
 
@@ -189,7 +195,7 @@ void MapScene::handleEvent(const SDL_Event& event) {
             }
 
             if (alreadyInteracting) {
-                LOG_DEBUG("Skipping additional E key processing, door interaction already in progress");
+                LOG_DEBUG("Door interaction already in progress");
                 break; // Прекращаем обработку клавиши
             }
 
@@ -222,9 +228,7 @@ void MapScene::handleEvent(const SDL_Event& event) {
                 LOG_INFO("Prioritizing interaction with open door: " + openDoorNearby->getName());
 
                 // Сбрасываем любые проблемные флаги на двери
-                if (openDoorNearby->isRequiringKeyRelease()) {
-                    openDoorNearby->resetKeyReleaseRequirement();
-                }
+                openDoorNearby->resetBlockingFlags();
 
                 // Прямое взаимодействие с дверью
                 bool success = openDoorNearby->interact(m_player.get());
@@ -236,6 +240,10 @@ void MapScene::handleEvent(const SDL_Event& event) {
                     if (m_interactionSystem) {
                         m_interactionSystem->setCurrentInteractingDoor(openDoorNearby);
                     }
+
+                    // НОВОЕ: Устанавливаем флаг ожидания отпускания клавиши
+                    m_waitingForKeyRelease = true;
+                    LOG_DEBUG("Setting key release wait flag after successful interaction");
                     break;
                 }
             }
@@ -271,7 +279,6 @@ void MapScene::handleEvent(const SDL_Event& event) {
                             ", IsActive: " + std::string(doorObj->isActive() ? "true" : "false") +
                             ", IsInteractable: " + std::string(doorObj->isInteractable() ? "true" : "false") +
                             ", Is Interacting: " + std::string(doorObj->isInteracting() ? "true" : "false") +
-                            ", Requires Key Release: " + std::string(doorObj->isRequiringKeyRelease() ? "true" : "false") +
                             ", In range: " + std::string(inRange ? "YES" : "NO"));
 
                         // Дополнительно проверим тайл на проходимость
@@ -300,11 +307,8 @@ void MapScene::handleEvent(const SDL_Event& event) {
                 if (closestDoor && m_player && !closestDoor->isOpen()) {
                     // Проверка: не идет ли уже процесс взаимодействия с этой дверью
                     if (!closestDoor->isInteracting()) {
-                        // ВАЖНОЕ ИЗМЕНЕНИЕ: Если дверь требует отпускания клавиши, сбрасываем этот флаг
-                        if (closestDoor->isRequiringKeyRelease()) {
-                            LOG_DEBUG("Resetting key release requirement for closest door: " + closestDoor->getName());
-                            closestDoor->resetKeyReleaseRequirement();
-                        }
+                        // Сбрасываем проблемные флаги для двери
+                        closestDoor->resetBlockingFlags();
 
                         LOG_DEBUG("Interacting directly with closest door: " + closestDoor->getName());
 
@@ -317,6 +321,11 @@ void MapScene::handleEvent(const SDL_Event& event) {
                             if (m_interactionSystem && closestDoor->isInteracting()) {
                                 m_interactionSystem->setCurrentInteractingDoor(closestDoor);
                             }
+
+                            // НОВОЕ: Устанавливаем флаг ожидания отпускания клавиши
+                            m_waitingForKeyRelease = true;
+                            LOG_DEBUG("Setting key release wait flag after successful door interaction");
+
                             // В случае успеха пропускаем дальнейшую обработку InteractionSystem
                             break;
                         }
@@ -330,7 +339,12 @@ void MapScene::handleEvent(const SDL_Event& event) {
             // Если не взаимодействовали напрямую с дверью, используем стандартную систему взаимодействия
             LOG_DEBUG("Calling InteractionSystem::handleInteraction()");
             if (m_interactionSystem) {
+                // Вызываем handleInteraction без проверки возвращаемого значения
                 m_interactionSystem->handleInteraction();
+
+                // Устанавливаем флаг ожидания отпускания клавиши в любом случае
+                m_waitingForKeyRelease = true;
+                LOG_DEBUG("Setting key release wait flag after system interaction");
             }
             break;
         }
@@ -346,20 +360,35 @@ void MapScene::handleEvent(const SDL_Event& event) {
             break;
         }
     }
-    // ВАЖНО: Обработка отпускания клавиши E для сброса флага m_requireKeyRelease у всех дверей
-    else if (event.type == SDL_KEYUP && event.key.keysym.sym == SDLK_e) {
-        LOG_DEBUG("E key released, resetting key release requirement for all doors");
+    // УЛУЧШЕННАЯ ОБРАБОТКА: Отпускание клавиши E для сброса флага m_requireKeyRelease у всех дверей
+else if (event.type == SDL_KEYUP && event.key.keysym.sym == SDLK_e) {
+    LOG_DEBUG("E key released, resetting wait flag and door flags");
 
-        // Перебираем все интерактивные объекты через EntityManager
-        for (auto& obj : m_entityManager->getInteractiveObjects()) {
-            if (auto doorObj = std::dynamic_pointer_cast<Door>(obj)) {
-                if (doorObj->isRequiringKeyRelease()) {
-                    LOG_DEBUG("Resetting key release requirement for door: " + doorObj->getName());
-                    doorObj->resetKeyReleaseRequirement();
-                }
+    // НОВОЕ: Сбрасываем глобальный флаг ожидания отпускания клавиши
+    m_waitingForKeyRelease = false;
+
+    // Перебираем все интерактивные объекты через EntityManager
+    bool anyDoorReset = false;
+    for (auto& obj : m_entityManager->getInteractiveObjects()) {
+        if (auto doorObj = std::dynamic_pointer_cast<Door>(obj)) {
+            // Сбрасываем все блокирующие флаги для дверей
+            doorObj->resetBlockingFlags();
+            anyDoorReset = true;
+            LOG_DEBUG("Reset all blocking flags for door: " + doorObj->getName());
+
+            // Проверяем, не осталась ли дверь в состоянии взаимодействия
+            if (doorObj->isInteracting()) {
+                LOG_WARNING("Door is still in interacting state after key release: " + doorObj->getName());
+                doorObj->cancelInteraction();
             }
         }
     }
+
+    // Уведомляем систему взаимодействия, что клавиша E отпущена
+    if (m_interactionSystem) {
+        m_interactionSystem->notifyKeyReleased(SDL_SCANCODE_E);
+    }
+}
 
     // Передаем события в базовый класс
     Scene::handleEvent(event);
@@ -475,7 +504,7 @@ void MapScene::update(float deltaTime) {
     // 4. Обновление всех сущностей через EntityManager
     m_entityManager->update(deltaTime);
 
-    // НОВЫЙ КОД: Периодическая проверка и обновление состояния дверей
+    // УЛУЧШЕННЫЙ КОД: Периодическая проверка и обновление состояния дверей
     static float doorCheckTimer = 0.0f;
     doorCheckTimer += deltaTime;
 
@@ -503,6 +532,23 @@ void MapScene::update(float deltaTime) {
                     // Убедимся, что у открытой двери правильная подсказка
                     doorObj->updateInteractionHint();
                 }
+
+                // НОВОЕ: Проверка на застрявшие флаги
+                if (doorObj->isRequiringKeyRelease()) {
+                    // Получаем состояние клавиши E
+                    const Uint8* keystate = SDL_GetKeyboardState(NULL);
+                    if (!keystate[SDL_SCANCODE_E]) {
+                        // Если клавиша E сейчас не нажата, но флаг все еще установлен, сбрасываем его
+                        LOG_WARNING("Door requiring key release but key E not pressed: " + doorObj->getName());
+                        doorObj->resetKeyReleaseRequirement();
+                    }
+                }
+
+                // НОВОЕ: Если дверь слишком долго в кулдауне, сбрасываем все блокирующие флаги
+                if (doorObj->getCooldownTimer() > 0.5f) {
+                    LOG_WARNING("Door in cooldown for too long: " + doorObj->getName());
+                    doorObj->resetBlockingFlags();
+                }
             }
         }
     }
@@ -510,9 +556,65 @@ void MapScene::update(float deltaTime) {
     // Проверка удержания клавиши E для взаимодействия с дверьми
     const Uint8* keyState = SDL_GetKeyboardState(NULL);
     if (keyState[SDL_SCANCODE_E]) {
-        // Обновляем состояние взаимодействия если клавиша E удерживается
-        if (m_interactionSystem) {
-            m_interactionSystem->updateInteraction(deltaTime);
+        // НОВОЕ: Если установлен флаг ожидания отпускания клавиши, 
+        // мы только обновляем прогресс текущего взаимодействия, но не начинаем новых
+        if (m_waitingForKeyRelease) {
+            // Только обновляем текущие активные взаимодействия
+            bool anyDoorInteracting = false;
+
+            for (auto& obj : m_entityManager->getInteractiveObjects()) {
+                if (auto doorObj = std::dynamic_pointer_cast<Door>(obj)) {
+                    if (doorObj->isInteracting()) {
+                        anyDoorInteracting = true;
+                        break;
+                    }
+                }
+            }
+
+            // Обновляем только если есть активное взаимодействие
+            if (anyDoorInteracting && m_interactionSystem) {
+                m_interactionSystem->updateInteraction(deltaTime);
+            }
+        }
+        else {
+            // Если флаг не установлен, это означает, что игрок только что нажал E
+            // Поскольку мы не хотим никаких автоматических взаимодействий здесь,
+            // устанавливаем флаг без дополнительных действий
+            static bool alreadyLogged = false;
+
+            if (!alreadyLogged) {
+                LOG_DEBUG("E key held, but we're waiting for key release event to process it");
+                alreadyLogged = true;
+            }
+        }
+    }
+    else {
+        // Клавиша E не нажата, можно сбросить флаг логирования
+        static bool alreadyLogged = false;
+        alreadyLogged = false;
+
+        // НОВОЕ: Также убедимся, что глобальный флаг сброшен
+        if (m_waitingForKeyRelease) {
+            LOG_DEBUG("E key not pressed but waitingForKeyRelease flag still set - fixing");
+            m_waitingForKeyRelease = false;
+        }
+
+        // Проверяем состояние дверей
+        static float keyCheckTimer = 0.0f;
+        keyCheckTimer += deltaTime;
+
+        if (keyCheckTimer >= 0.5f) {
+            keyCheckTimer = 0.0f;
+
+            // Проверяем, не "застряли" ли двери в интерактивном состоянии
+            for (auto& obj : m_entityManager->getInteractiveObjects()) {
+                if (auto doorObj = std::dynamic_pointer_cast<Door>(obj)) {
+                    if (doorObj->isInteracting()) {
+                        LOG_WARNING("Door stuck in interaction state but E not pressed: " + doorObj->getName());
+                        doorObj->cancelInteraction();
+                    }
+                }
+            }
         }
     }
 

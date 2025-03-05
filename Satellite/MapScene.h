@@ -197,6 +197,8 @@ private:
     std::shared_ptr<CollisionSystem> m_collisionSystem;  ///< Система коллизий
     std::shared_ptr<RenderingSystem> m_renderingSystem;  ///< Система рендеринга
     std::shared_ptr<UIManager> m_uiManager;              /// Добавлен новый член класса
+    bool m_waitingForKeyRelease = false;
+   // bool m_waitingForKeyRelease;  ///< Флаг, указывающий, что ожидается отпускание клавиши E
 
     bool m_showDebug;                                    ///< Флаг отображения отладочной информации
     int m_currentBiome;                                  ///< Текущий биом карты

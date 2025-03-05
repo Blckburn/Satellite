@@ -474,3 +474,48 @@ void InteractionSystem::updateInteraction(float deltaTime) {
         m_isInteractingWithDoor = false;
     }
 }
+
+// Реализация метода notifyKeyReleased
+void InteractionSystem::notifyKeyReleased(SDL_Scancode scancode) {
+    // Обрабатываем отпускание клавиши E (используется для взаимодействия)
+    if (scancode == SDL_SCANCODE_E) {
+        LOG_DEBUG("InteractionSystem: E key released");
+
+        // Если у нас есть активное взаимодействие с дверью и клавиша была отпущена
+        if (m_currentInteractingDoor) {
+            LOG_DEBUG("Notifying door of key release: " + m_currentInteractingDoor->getName());
+            m_currentInteractingDoor->resetKeyReleaseRequirement();
+
+            // Проверяем, не застряла ли дверь в состоянии взаимодействия
+            if (m_currentInteractingDoor->isInteracting() &&
+                m_currentInteractingDoor->getInteractionProgress() < 0.1f) {
+                LOG_WARNING("Door stuck in early interaction phase, resetting");
+                m_currentInteractingDoor->cancelInteraction();
+            }
+        }
+
+        // Сбросим флаг взаимодействия для всех близлежащих дверей
+        if (m_player) {
+            float playerX = m_player->getFullX();
+            float playerY = m_player->getFullY();
+
+            // Проходим по всем интерактивным объектам
+            for (auto& obj : m_entityManager->getInteractiveObjects()) {
+                if (auto doorObj = std::dynamic_pointer_cast<Door>(obj)) {
+                    // Проверяем расстояние до игрока
+                    float doorX = doorObj->getPosition().x;
+                    float doorY = doorObj->getPosition().y;
+                    float dx = doorX - playerX;
+                    float dy = doorY - playerY;
+                    float distSq = dx * dx + dy * dy;
+
+                    // Если дверь находится достаточно близко (в пределах 3 тайлов)
+                    if (distSq <= 9.0f) {
+                        doorObj->resetKeyReleaseRequirement();
+                        LOG_DEBUG("Reset key release for nearby door: " + doorObj->getName());
+                    }
+                }
+            }
+        }
+    }
+}
