@@ -179,154 +179,161 @@ void MapScene::handleEvent(const SDL_Event& event) {
             LOG_DEBUG("Debug mode: " + std::string(m_showDebug ? "enabled" : "disabled"));
             break;
 
- case SDLK_e:
-{
-    // ВАЖНЫЙ ФИХ: Проверяем, идет ли уже взаимодействие с дверью
-    bool alreadyInteracting = false;
-    
-    if (m_interactionSystem) {
-        alreadyInteracting = m_interactionSystem->isInteractingWithDoor();
-    }
-    
-    if (alreadyInteracting) {
-        LOG_DEBUG("Skipping additional E key processing, door interaction already in progress");
-        break; // Прекращаем обработку клавиши
-    }
-    
-    // УЛУЧШЕННЫЙ ПОИСК ОТКРЫТЫХ ДВЕРЕЙ
-    // Сначала проверяем, есть ли открытые двери поблизости, с которыми можно взаимодействовать
-    std::shared_ptr<Door> openDoorNearby = nullptr;
-    float openDoorMinDistance = std::numeric_limits<float>::max();
-    
-    for (auto& obj : m_entityManager->getInteractiveObjects()) {
-        if (auto doorObj = std::dynamic_pointer_cast<Door>(obj)) {
-            if (doorObj->isOpen() && doorObj->isActive() && doorObj->isInteractable()) {
-                float doorX = doorObj->getPosition().x;
-                float doorY = doorObj->getPosition().y;
-                float dx = doorX - playerX;
-                float dy = doorY - playerY;
-                float distanceSq = dx * dx + dy * dy;
-                float radius = doorObj->getInteractionRadius();
-                
-                if (distanceSq <= radius * radius && distanceSq < openDoorMinDistance) {
-                    openDoorNearby = doorObj;
-                    openDoorMinDistance = distanceSq;
-                    LOG_INFO("Found nearby OPEN door: " + doorObj->getName());
-                }
-            }
-        }
-    }
-    
-    // Если нашли открытую дверь поблизости, приоритетно взаимодействуем с ней
-    if (openDoorNearby && m_player) {
-        LOG_INFO("Prioritizing interaction with open door: " + openDoorNearby->getName());
-        
-        // Сбрасываем любые проблемные флаги на двери
-        if (openDoorNearby->isRequiringKeyRelease()) {
-            openDoorNearby->resetKeyReleaseRequirement();
-        }
-        
-        // Прямое взаимодействие с дверью
-        bool success = openDoorNearby->interact(m_player.get());
-        LOG_INFO(std::string("Direct interaction with open door ") +
-            (success ? "succeeded" : "failed"));
-        
-        if (success) {
-            // Если успешно начали взаимодействие, обновляем состояние InteractionSystem
+        case SDLK_e:
+        {
+            // ВАЖНЫЙ ФИХ: Проверяем, идет ли уже взаимодействие с дверью
+            bool alreadyInteracting = false;
+
             if (m_interactionSystem) {
-                m_interactionSystem->setCurrentInteractingDoor(openDoorNearby);
+                alreadyInteracting = m_interactionSystem->isInteractingWithDoor();
             }
-            break;
-        }
-    }
-    
-    // ВАЖНОЕ ИЗМЕНЕНИЕ: Улучшенная диагностика состояния дверей
-    LOG_DEBUG("==== E KEY PRESSED - DOOR STATUS CHECK ====");
-    LOG_DEBUG("Player position: (" + std::to_string(playerX) + ", " +
-        std::to_string(playerY) + ")");
 
-    // Проверяем все двери поблизости от игрока
-    {
-        bool foundAnyDoors = false;
-        float closestDistance = std::numeric_limits<float>::max();
-        std::shared_ptr<Door> closestDoor = nullptr;
+            if (alreadyInteracting) {
+                LOG_DEBUG("Skipping additional E key processing, door interaction already in progress");
+                break; // Прекращаем обработку клавиши
+            }
 
-        for (auto& obj : m_entityManager->getInteractiveObjects()) {
-            if (auto doorObj = std::dynamic_pointer_cast<Door>(obj)) {
-                foundAnyDoors = true;
-                
-                float doorX = doorObj->getPosition().x;
-                float doorY = doorObj->getPosition().y;
-                float dx = doorX - playerX;
-                float dy = doorY - playerY;
-                float distanceSq = dx * dx + dy * dy;
-                float radius = doorObj->getInteractionRadius();
-                bool inRange = distanceSq <= radius * radius;
+            // УЛУЧШЕННЫЙ ПОИСК ОТКРЫТЫХ ДВЕРЕЙ
+            // Сначала проверяем, есть ли открытые двери поблизости, с которыми можно взаимодействовать
+            std::shared_ptr<Door> openDoorNearby = nullptr;
+            float openDoorMinDistance = std::numeric_limits<float>::max();
 
-                LOG_DEBUG("Door: " + doorObj->getName() +
-                    ", Position: (" + std::to_string(doorX) + ", " + std::to_string(doorY) + ")" +
-                    ", Distance: " + std::to_string(sqrt(distanceSq)) +
-                    ", Radius: " + std::to_string(radius) +
-                    ", IsOpen: " + std::string(doorObj->isOpen() ? "true" : "false") +
-                    ", IsActive: " + std::string(doorObj->isActive() ? "true" : "false") +
-                    ", IsInteractable: " + std::string(doorObj->isInteractable() ? "true" : "false") +
-                    ", Is Interacting: " + std::string(doorObj->isInteracting() ? "true" : "false") +
-                    ", In range: " + std::string(inRange ? "YES" : "NO"));
-                    
-                // Дополнительно проверим тайл на проходимость
-                if (m_tileMap && m_tileMap->isValidCoordinate(doorX, doorY)) {
-                    MapTile* tile = m_tileMap->getTile(doorX, doorY);
-                    if (tile) {
-                        LOG_DEBUG("   Tile at door position: walkable=" + 
-                            std::string(tile->isWalkable() ? "true" : "false") + 
-                            ", type=" + std::to_string(static_cast<int>(tile->getType())));
+            for (auto& obj : m_entityManager->getInteractiveObjects()) {
+                if (auto doorObj = std::dynamic_pointer_cast<Door>(obj)) {
+                    if (doorObj->isOpen() && doorObj->isActive() && doorObj->isInteractable()) {
+                        float doorX = doorObj->getPosition().x;
+                        float doorY = doorObj->getPosition().y;
+                        float dx = doorX - playerX;
+                        float dy = doorY - playerY;
+                        float distanceSq = dx * dx + dy * dy;
+                        float radius = doorObj->getInteractionRadius();
+
+                        if (distanceSq <= radius * radius && distanceSq < openDoorMinDistance) {
+                            openDoorNearby = doorObj;
+                            openDoorMinDistance = distanceSq;
+                            LOG_INFO("Found nearby OPEN door: " + doorObj->getName());
+                        }
                     }
                 }
-                
-                // Запоминаем ближайшую дверь
-                if (inRange && distanceSq < closestDistance) {
-                    closestDistance = distanceSq;
-                    closestDoor = doorObj;
-                }
             }
-        }
-        
-        if (!foundAnyDoors) {
-            LOG_DEBUG("No doors found in the scene!");
-        }
-        
-        // Если нашли ближайшую дверь (не открытую), выполняем с ней взаимодействие напрямую
-        if (closestDoor && m_player && !closestDoor->isOpen()) {
-            // Проверка: не идет ли уже процесс взаимодействия с этой дверью
-            if (!closestDoor->isInteracting()) {
-                LOG_DEBUG("Interacting directly with closest door: " + closestDoor->getName());
-                
+
+            // Если нашли открытую дверь поблизости, приоритетно взаимодействуем с ней
+            if (openDoorNearby && m_player) {
+                LOG_INFO("Prioritizing interaction with open door: " + openDoorNearby->getName());
+
+                // Сбрасываем любые проблемные флаги на двери
+                if (openDoorNearby->isRequiringKeyRelease()) {
+                    openDoorNearby->resetKeyReleaseRequirement();
+                }
+
                 // Прямое взаимодействие с дверью
-                bool success = closestDoor->interact(m_player.get());
-                LOG_DEBUG("Direct door interaction " + std::string(success ? "succeeded" : "failed"));
-                
+                bool success = openDoorNearby->interact(m_player.get());
+                LOG_INFO(std::string("Direct interaction with open door ") +
+                    (success ? "succeeded" : "failed"));
+
                 if (success) {
-                    // Если дверь теперь в процессе взаимодействия, обновляем InteractionSystem
-                    if (m_interactionSystem && closestDoor->isInteracting()) {
-                        m_interactionSystem->setCurrentInteractingDoor(closestDoor);
+                    // Если успешно начали взаимодействие, обновляем состояние InteractionSystem
+                    if (m_interactionSystem) {
+                        m_interactionSystem->setCurrentInteractingDoor(openDoorNearby);
                     }
-                    // В случае успеха пропускаем дальнейшую обработку InteractionSystem
                     break;
                 }
             }
-            else {
-                LOG_DEBUG("Closest door is already interacting, skipping direct interaction");
-            }
-        }
-    }
 
-    // Если не взаимодействовали напрямую с дверью, используем стандартную систему взаимодействия
-    LOG_DEBUG("Calling InteractionSystem::handleInteraction()");
-    if (m_interactionSystem) {
-        m_interactionSystem->handleInteraction();
-    }
-    break;
-}
+            // ВАЖНОЕ ИЗМЕНЕНИЕ: Улучшенная диагностика состояния дверей
+            LOG_DEBUG("==== E KEY PRESSED - DOOR STATUS CHECK ====");
+            LOG_DEBUG("Player position: (" + std::to_string(playerX) + ", " +
+                std::to_string(playerY) + ")");
+
+            // Проверяем все двери поблизости от игрока
+            {
+                bool foundAnyDoors = false;
+                float closestDistance = std::numeric_limits<float>::max();
+                std::shared_ptr<Door> closestDoor = nullptr;
+
+                for (auto& obj : m_entityManager->getInteractiveObjects()) {
+                    if (auto doorObj = std::dynamic_pointer_cast<Door>(obj)) {
+                        foundAnyDoors = true;
+
+                        float doorX = doorObj->getPosition().x;
+                        float doorY = doorObj->getPosition().y;
+                        float dx = doorX - playerX;
+                        float dy = doorY - playerY;
+                        float distanceSq = dx * dx + dy * dy;
+                        float radius = doorObj->getInteractionRadius();
+                        bool inRange = distanceSq <= radius * radius;
+
+                        LOG_DEBUG("Door: " + doorObj->getName() +
+                            ", Position: (" + std::to_string(doorX) + ", " + std::to_string(doorY) + ")" +
+                            ", Distance: " + std::to_string(sqrt(distanceSq)) +
+                            ", Radius: " + std::to_string(radius) +
+                            ", IsOpen: " + std::string(doorObj->isOpen() ? "true" : "false") +
+                            ", IsActive: " + std::string(doorObj->isActive() ? "true" : "false") +
+                            ", IsInteractable: " + std::string(doorObj->isInteractable() ? "true" : "false") +
+                            ", Is Interacting: " + std::string(doorObj->isInteracting() ? "true" : "false") +
+                            ", Requires Key Release: " + std::string(doorObj->isRequiringKeyRelease() ? "true" : "false") +
+                            ", In range: " + std::string(inRange ? "YES" : "NO"));
+
+                        // Дополнительно проверим тайл на проходимость
+                        if (m_tileMap && m_tileMap->isValidCoordinate(doorX, doorY)) {
+                            MapTile* tile = m_tileMap->getTile(doorX, doorY);
+                            if (tile) {
+                                LOG_DEBUG("   Tile at door position: walkable=" +
+                                    std::string(tile->isWalkable() ? "true" : "false") +
+                                    ", type=" + std::to_string(static_cast<int>(tile->getType())));
+                            }
+                        }
+
+                        // Запоминаем ближайшую дверь
+                        if (inRange && distanceSq < closestDistance) {
+                            closestDistance = distanceSq;
+                            closestDoor = doorObj;
+                        }
+                    }
+                }
+
+                if (!foundAnyDoors) {
+                    LOG_DEBUG("No doors found in the scene!");
+                }
+
+                // Если нашли ближайшую дверь (не открытую), выполняем с ней взаимодействие напрямую
+                if (closestDoor && m_player && !closestDoor->isOpen()) {
+                    // Проверка: не идет ли уже процесс взаимодействия с этой дверью
+                    if (!closestDoor->isInteracting()) {
+                        // ВАЖНОЕ ИЗМЕНЕНИЕ: Если дверь требует отпускания клавиши, сбрасываем этот флаг
+                        if (closestDoor->isRequiringKeyRelease()) {
+                            LOG_DEBUG("Resetting key release requirement for closest door: " + closestDoor->getName());
+                            closestDoor->resetKeyReleaseRequirement();
+                        }
+
+                        LOG_DEBUG("Interacting directly with closest door: " + closestDoor->getName());
+
+                        // Прямое взаимодействие с дверью
+                        bool success = closestDoor->interact(m_player.get());
+                        LOG_DEBUG("Direct door interaction " + std::string(success ? "succeeded" : "failed"));
+
+                        if (success) {
+                            // Если дверь теперь в процессе взаимодействия, обновляем InteractionSystem
+                            if (m_interactionSystem && closestDoor->isInteracting()) {
+                                m_interactionSystem->setCurrentInteractingDoor(closestDoor);
+                            }
+                            // В случае успеха пропускаем дальнейшую обработку InteractionSystem
+                            break;
+                        }
+                    }
+                    else {
+                        LOG_DEBUG("Closest door is already interacting, skipping direct interaction");
+                    }
+                }
+            }
+
+            // Если не взаимодействовали напрямую с дверью, используем стандартную систему взаимодействия
+            LOG_DEBUG("Calling InteractionSystem::handleInteraction()");
+            if (m_interactionSystem) {
+                m_interactionSystem->handleInteraction();
+            }
+            break;
+        }
 
         case SDLK_ESCAPE:
             // Если отображается информация терминала, скрываем её
@@ -339,19 +346,20 @@ void MapScene::handleEvent(const SDL_Event& event) {
             break;
         }
     }
-    // Обработка отпускания клавиши E
-else if (event.type == SDL_KEYUP && event.key.keysym.sym == SDLK_e) {
-    LOG_DEBUG("E key released, resetting key release requirement");
-    // Проверяем, есть ли текущие взаимодействия с дверями через EntityManager
-    for (auto& obj : m_entityManager->getInteractiveObjects()) {
-        if (auto doorObj = std::dynamic_pointer_cast<Door>(obj)) {
-            if (doorObj->isRequiringKeyRelease()) {
-                LOG_DEBUG("Resetting key release requirement for door: " + doorObj->getName());
-                doorObj->resetKeyReleaseRequirement();
+    // ВАЖНО: Обработка отпускания клавиши E для сброса флага m_requireKeyRelease у всех дверей
+    else if (event.type == SDL_KEYUP && event.key.keysym.sym == SDLK_e) {
+        LOG_DEBUG("E key released, resetting key release requirement for all doors");
+
+        // Перебираем все интерактивные объекты через EntityManager
+        for (auto& obj : m_entityManager->getInteractiveObjects()) {
+            if (auto doorObj = std::dynamic_pointer_cast<Door>(obj)) {
+                if (doorObj->isRequiringKeyRelease()) {
+                    LOG_DEBUG("Resetting key release requirement for door: " + doorObj->getName());
+                    doorObj->resetKeyReleaseRequirement();
+                }
             }
         }
     }
-}
 
     // Передаем события в базовый класс
     Scene::handleEvent(event);
