@@ -163,6 +163,24 @@ public:
   */
     void updateInteractionHint();
 
+    /**
+ * @brief Получает указатель на карту тайлов
+ * @return Указатель на карту тайлов
+ */
+    TileMap* getTileMap() const { return m_tileMap; }
+
+    /**
+     * @brief Устанавливает указатель на карту тайлов
+     * @param tileMap Указатель на карту тайлов
+     */
+    void setTileMap(TileMap* tileMap) { m_tileMap = tileMap; }
+
+    /**
+     * @brief Получает указатель на систему взаимодействия
+     * @return Указатель на систему взаимодействия
+     */
+    InteractionSystem* getInteractionSystem() const { return m_interactionSystem; }
+
 
 private:
     /**

@@ -15,6 +15,15 @@
  */
 class InteractionSystem {
 public:
+
+    /**
+ * @brief Устанавливает текущую дверь для взаимодействия
+ * @param door Указатель на дверь
+ */
+    void setCurrentInteractingDoor(std::shared_ptr<Door> door) {
+        m_currentInteractingDoor = door;
+        m_isInteractingWithDoor = (door != nullptr);
+    }
     /**
      * @brief Конструктор
      * @param player Указатель на игрока

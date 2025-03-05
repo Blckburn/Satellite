@@ -115,7 +115,7 @@ std::shared_ptr<InteractiveObject> EntityManager::findNearestInteractiveObject(
     LOG_DEBUG("Looking for nearest interactive object at position (" +
         std::to_string(playerX) + ", " + std::to_string(playerY) + ")");
 
-    // НОВЫЙ КОД: Сначала ищем ОТКРЫТЫЕ двери поблизости с приоритетом
+    // ВАЖНОЕ УЛУЧШЕНИЕ: Сначала проверяем открытые двери как приоритетные объекты
     for (auto& obj : m_interactiveObjects) {
         if (auto doorObj = std::dynamic_pointer_cast<Door>(obj)) {
             if (doorObj->isOpen() && doorObj->isActive() && doorObj->isInteractable()) {
@@ -128,57 +128,75 @@ std::shared_ptr<InteractiveObject> EntityManager::findNearestInteractiveObject(
                 float radius = doorObj->getInteractionRadius();
 
                 if (distanceSquared <= radius * radius) {
-                    LOG_DEBUG("Found OPEN door in range: " + doorObj->getName());
+                    LOG_DEBUG("Found OPEN door in range with priority: " + doorObj->getName());
                     return doorObj;
                 }
             }
         }
     }
 
-    // Стандартный поиск всех интерактивных объектов
+    // Стандартный поиск для других объектов
     std::shared_ptr<InteractiveObject> nearestObject = nullptr;
     float minDistanceSquared = std::numeric_limits<float>::max();
 
-    int countChecked = 0;
-    int countInRange = 0;
+    // ИЗМЕНЕНИЕ: Сначала просматриваем двери, затем все остальные объекты
+    std::vector<std::shared_ptr<InteractiveObject>> doorObjects;
+    std::vector<std::shared_ptr<InteractiveObject>> otherObjects;
 
-    // Проходим по всем интерактивным объектам
+    // Сортируем объекты на двери и не-двери
     for (auto& obj : m_interactiveObjects) {
-        countChecked++;
-
         if (!obj->isActive() || !obj->isInteractable()) {
             continue;
         }
 
-        float objX = obj->getPosition().x;
-        float objY = obj->getPosition().y;
-
-        float dx = objX - playerX;
-        float dy = objY - playerY;
-        float distanceSquared = dx * dx + dy * dy;
-
-        // Получаем радиус взаимодействия
-        float interactionRadius = 1.0f; // Значение по умолчанию
-        if (auto interactiveObj = std::dynamic_pointer_cast<InteractiveObject>(obj)) {
-            interactionRadius = interactiveObj->getInteractionRadius();
+        if (std::dynamic_pointer_cast<Door>(obj)) {
+            doorObjects.push_back(obj);
         }
-
-        // Проверяем, находится ли объект в пределах радиуса
-        if (distanceSquared <= interactionRadius * interactionRadius) {
-            countInRange++;
-
-            // Если это первый найденный объект или он ближе предыдущего ближайшего
-            if (!nearestObject || distanceSquared < minDistanceSquared) {
-                nearestObject = std::dynamic_pointer_cast<InteractiveObject>(obj);
-                minDistanceSquared = distanceSquared;
-            }
+        else {
+            otherObjects.push_back(obj);
         }
     }
 
+    // Функция для обработки объектов и нахождения ближайшего
+    auto processObjects = [&](const std::vector<std::shared_ptr<InteractiveObject>>& objects) {
+        for (auto& obj : objects) {
+            float objX = obj->getPosition().x;
+            float objY = obj->getPosition().y;
+
+            float dx = objX - playerX;
+            float dy = objY - playerY;
+            float distanceSquared = dx * dx + dy * dy;
+
+            // Получаем радиус взаимодействия
+            float interactionRadius = obj->getInteractionRadius();
+
+            // Проверяем, находится ли объект в пределах радиуса
+            if (distanceSquared <= interactionRadius * interactionRadius) {
+                // Если это первый найденный объект или он ближе предыдущего ближайшего
+                if (!nearestObject || distanceSquared < minDistanceSquared) {
+                    nearestObject = obj;
+                    minDistanceSquared = distanceSquared;
+                }
+            }
+        }
+        };
+
+    // Сначала проверяем двери (приоритет)
+    processObjects(doorObjects);
+
+    // Если дверей в радиусе нет, проверяем другие объекты
+    if (!nearestObject) {
+        processObjects(otherObjects);
+    }
+
     // ОТЛАДКА
-    LOG_DEBUG("Checked " + std::to_string(countChecked) + " objects, found " +
-        std::to_string(countInRange) + " in range, nearest: " +
-        (nearestObject ? nearestObject->getName() : "none"));
+    if (nearestObject) {
+        LOG_DEBUG("Found nearest object: " + nearestObject->getName() +
+            ", distance: " + std::to_string(std::sqrt(minDistanceSquared)));
+    }
+    else {
+        LOG_DEBUG("No interactive objects in range");
+    }
 
     return nearestObject;
 }

@@ -21,10 +21,19 @@ void InteractionSystem::handleInteraction() {
     float playerDirX = m_player->getDirectionX();
     float playerDirY = m_player->getDirectionY();
 
-    // Если уже идет взаимодействие с дверью, не ищем новые объекты
+    // ВАЖНАЯ ПРОВЕРКА: Если уже идет взаимодействие с дверью, не обрабатываем новые взаимодействия
     if (m_isInteractingWithDoor && m_currentInteractingDoor) {
-        LOG_DEBUG("Already interacting with door: " + m_currentInteractingDoor->getName());
-        return;
+        if (m_currentInteractingDoor->isInteracting()) {
+            LOG_DEBUG("Already interacting with door: " + m_currentInteractingDoor->getName() +
+                ", progress: " + std::to_string(m_currentInteractingDoor->getInteractionProgress() * 100) + "%");
+            return;
+        }
+        // Если дверь не взаимодействует, но флаг установлен, сбрасываем состояние
+        else {
+            LOG_DEBUG("Resetting door interaction state");
+            m_isInteractingWithDoor = false;
+            m_currentInteractingDoor = nullptr;
+        }
     }
 
     // Более подробная диагностика поиска объектов
@@ -54,16 +63,35 @@ void InteractionSystem::handleInteraction() {
             // Проверяем, является ли объект дверью
             if (auto doorObj = std::dynamic_pointer_cast<Door>(nearestObject)) {
                 LOG_DEBUG("Door object found: " + doorObj->getName() +
-                    ", isOpen: " + std::string(doorObj->isOpen() ? "true" : "false"));
+                    ", isOpen: " + std::string(doorObj->isOpen() ? "true" : "false") +
+                    ", isInteracting: " + std::string(doorObj->isInteracting() ? "true" : "false"));
 
-                // Начинаем процесс взаимодействия с дверью (с каст-временем)
-                if (doorObj->startInteraction()) {
+                // ДОПОЛНИТЕЛЬНАЯ ПРОВЕРКА: Не начинаем взаимодействие, если оно уже идет
+                if (doorObj->isInteracting()) {
+                    LOG_DEBUG("Door is already in the interaction process, skipping");
+                    // Просто убедимся, что флаги взаимодействия установлены правильно
+                    m_currentInteractingDoor = doorObj;
+                    m_isInteractingWithDoor = true;
+                    return;
+                }
+
+                // ВОССТАНОВЛЕНИЕ КАСТ-ВРЕМЕНИ
+                // Если в двери нет ссылки на InteractionSystem, устанавливаем её
+                if (doorObj->getInteractionSystem() == nullptr) {
+                    LOG_WARNING("Door has no InteractionSystem reference! Setting it now.");
+                    doorObj->setInteractionSystem(this);
+                }
+
+                // Вызываем interact, который теперь запускает процесс взаимодействия с каст-временем
+                bool interactResult = doorObj->interact(m_player.get());
+                if (interactResult) {
+                    // Запоминаем дверь для обновления в update()
                     m_currentInteractingDoor = doorObj;
                     m_isInteractingWithDoor = true;
                     LOG_INFO("Started interaction process with door " + doorObj->getName());
                 }
                 else {
-                    LOG_DEBUG("Door::startInteraction() returned false - interaction blocked");
+                    LOG_DEBUG("Door interaction failed or blocked");
                 }
             }
             // Проверяем, является ли объект терминалом
@@ -149,13 +177,14 @@ void InteractionSystem::handleInteraction() {
     else {
         LOG_INFO("No interactive objects in range");
     }
-} 
+}
 
 void InteractionSystem::update(float deltaTime) {
     // Проверяем состояние текущего взаимодействия с дверью
     if (m_isInteractingWithDoor && m_currentInteractingDoor) {
         // Если дверь перестала взаимодействовать (завершила каст или игрок слишком далеко)
         if (!m_currentInteractingDoor->isInteracting()) {
+            LOG_DEBUG("Door no longer interacting, clearing interaction state");
             m_currentInteractingDoor = nullptr;
             m_isInteractingWithDoor = false;
         }
@@ -375,37 +404,73 @@ std::string InteractionSystem::truncateText(const std::string& text, size_t maxL
 void InteractionSystem::updateInteraction(float deltaTime) {
     // Проверяем, идет ли взаимодействие с дверью
     if (m_isInteractingWithDoor && m_currentInteractingDoor) {
-        LOG_DEBUG("Updating door interaction, current progress: " +
-            std::to_string(m_currentInteractingDoor->getInteractionProgress() * 100) + "%");
+        // ВАЖНЫЙ ФИХ: Проверка, что дверь все еще находится в процессе взаимодействия
+        if (!m_currentInteractingDoor->isInteracting()) {
+            LOG_WARNING("Door not interacting but flag is set, cleaning up state");
+            m_isInteractingWithDoor = false;
+            m_currentInteractingDoor = nullptr;
+            return;
+        }
 
-        // Обновляем время взаимодействия
+        // Логируем текущий прогресс только при значительных изменениях (каждые 10%)
         float currentProgress = m_currentInteractingDoor->getInteractionProgress();
-        float newProgress = currentProgress + deltaTime / m_currentInteractingDoor->getInteractionRequiredTime();
+        static int lastLoggedProgress = -1;
+        int currentProgressInt = static_cast<int>(currentProgress * 10);
 
-        // Обновляем прогресс
-        m_currentInteractingDoor->updateInteractionProgress(newProgress);
+        if (currentProgressInt != lastLoggedProgress) {
+            lastLoggedProgress = currentProgressInt;
+            LOG_DEBUG("Updating door interaction, current progress: " +
+                std::to_string(currentProgress * 100) + "%");
+        }
+
+        // Вычисляем новый прогресс взаимодействия
+        float requiredTime = m_currentInteractingDoor->getInteractionRequiredTime();
+        if (requiredTime <= 0.0f) {
+            LOG_WARNING("Door has invalid interaction required time, setting to default 1.0 second");
+            requiredTime = 1.0f;
+        }
+
+        float newProgress = currentProgress + (deltaTime / requiredTime);
+
+        // Обновляем прогресс взаимодействия (ограничиваем максимум в 1.0)
+        m_currentInteractingDoor->updateInteractionProgress(std::min(1.0f, newProgress));
 
         // Если достигли 100%, завершаем взаимодействие
         if (newProgress >= 1.0f) {
-            LOG_DEBUG("Door interaction completed, finalizing...");
-            m_currentInteractingDoor->completeInteraction();
+            LOG_INFO("Door interaction completed, finalizing...");
+
+            // Важное изменение: сохраняем ссылку на дверь перед вызовом completeInteraction
+            auto doorPtr = m_currentInteractingDoor;
+
+            // Сбрасываем флаги взаимодействия до вызова completeInteraction
             m_isInteractingWithDoor = false;
+            m_currentInteractingDoor = nullptr;
 
-            // ВАЖНО: Не обнуляем указатель на дверь здесь, чтобы не потерять референс
-            // Иначе есть риск, что дверь будет удалена и станет недоступной
+            // Вызываем completeInteraction с обработкой ошибок
+            try {
+                doorPtr->completeInteraction();
 
-            // Проверяем, что дверь осталась интерактивной
-            if (m_currentInteractingDoor && !m_currentInteractingDoor->isInteractable()) {
-                LOG_WARNING("Door became non-interactable after interaction, fixing...");
-                m_currentInteractingDoor->setInteractable(true);
+                // Показываем сообщение о завершении
+                m_showInteractionPrompt = true;
+                m_interactionPromptTimer = 0.0f;
+                m_interactionPrompt = doorPtr->isOpen() ? "Door opened" : "Door closed";
+            }
+            catch (std::exception& e) {
+                LOG_ERROR("Exception during door interaction completion: " + std::string(e.what()));
+            }
+            catch (...) {
+                LOG_ERROR("Unknown exception during door interaction completion");
             }
 
-            // Только теперь очищаем указатель после всех проверок
-            m_currentInteractingDoor = nullptr;
+            // Проверяем, что дверь осталась интерактивной
+            if (doorPtr && !doorPtr->isInteractable()) {
+                LOG_WARNING("Door became non-interactable after interaction, fixing...");
+                doorPtr->setInteractable(true);
+            }
         }
     }
     else if (m_isInteractingWithDoor && !m_currentInteractingDoor) {
-        LOG_ERROR("Interaction flag set but door pointer is null!");
+        LOG_ERROR("Interaction flag set but door pointer is null, resetting state");
         m_isInteractingWithDoor = false;
     }
 }
