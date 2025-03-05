@@ -9,6 +9,8 @@
 #include "CollisionSystem.h"
 #include "EntityManager.h"
 #include "InteractionSystem.h"
+#include "RenderingSystem.h"
+#include "UIManager.h"  // Добавлено новое включение
 #include <SDL.h>
 #include <memory>
 #include <vector>
@@ -83,13 +85,6 @@ public:
      */
     void detectKeyInput();
 
-    /**
-     * @brief Отрисовка отладочной информации
-     * @param renderer Указатель на SDL_Renderer
-     * @param centerX X координата центра экрана
-     * @param centerY Y координата центра экрана
-     */
-    void renderDebug(SDL_Renderer* renderer, int centerX, int centerY);
 
     /**
      * @brief Отрисовка сцены с использованием блочной Z-сортировки
@@ -182,17 +177,8 @@ private:
      */
     void renderInteractiveObjects(SDL_Renderer* renderer, int centerX, int centerY);
 
-    /**
-     * @brief Отрисовка подсказки для взаимодействия
-     * @param renderer SDL рендерер
-     */
-    void renderInteractionPrompt(SDL_Renderer* renderer);
 
-    /**
-     * @brief Отрисовка информации терминала
-     * @param renderer SDL рендерер
-     */
-    void renderTerminalInfo(SDL_Renderer* renderer);
+
 
 private:
     std::shared_ptr<WorldGenerator> m_worldGenerator;    ///< Генератор игрового мира
@@ -205,6 +191,8 @@ private:
     std::shared_ptr<Camera> m_camera;                    ///< Камера
     std::shared_ptr<Player> m_player;                    ///< Игрок
     std::shared_ptr<CollisionSystem> m_collisionSystem;  ///< Система коллизий
+    std::shared_ptr<RenderingSystem> m_renderingSystem;  ///< Система рендеринга
+    std::shared_ptr<UIManager> m_uiManager;              /// Добавлен новый член класса
 
     bool m_showDebug;                                    ///< Флаг отображения отладочной информации
     int m_currentBiome;                                  ///< Текущий биом карты
