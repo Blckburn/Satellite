@@ -92,6 +92,31 @@ private:
      */
     void renderPlayer(SDL_Renderer* renderer, std::shared_ptr<Player> player, float priority);
 
+
+    /**
+ * @brief Проверяет, есть ли на указанной позиции дверь
+ * @param x X-координата
+ * @param y Y-координата
+ * @param interactiveObjects Список интерактивных объектов
+ * @return true, если на позиции есть дверь
+ */
+    bool isDoorAtPosition(int x, int y,
+        const std::vector<std::shared_ptr<InteractiveObject>>& interactiveObjects) {
+        for (auto& obj : interactiveObjects) {
+            if (auto doorObj = std::dynamic_pointer_cast<Door>(obj)) {
+                // Получаем позицию двери, округляя до целых
+                int doorX = static_cast<int>(doorObj->getPosition().x);
+                int doorY = static_cast<int>(doorObj->getPosition().y);
+
+                // Если координаты совпадают, значит на этой позиции есть дверь
+                if (doorX == x && doorY == y) {
+                    return true;
+                }
+            }
+        }
+        return false;
+    }
+
     std::shared_ptr<TileMap> m_tileMap;                ///< Указатель на карту тайлов
     std::shared_ptr<TileRenderer> m_tileRenderer;      ///< Указатель на рендерер тайлов
     std::shared_ptr<IsometricRenderer> m_isoRenderer;  ///< Указатель на изометрический рендерер

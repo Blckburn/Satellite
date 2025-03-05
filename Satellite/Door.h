@@ -3,6 +3,7 @@
 #include "InteractiveObject.h"
 #include "TileMap.h"
 #include <memory>
+#include "Logger.h"
 
 // Forward declarations
 class MapScene;
@@ -180,6 +181,24 @@ public:
      * @return Указатель на систему взаимодействия
      */
     InteractionSystem* getInteractionSystem() const { return m_interactionSystem; }
+
+
+    /**
+ * @brief Сбрасывает все блокирующие флаги (для решения проблем с взаимодействием)
+ */
+    void resetBlockingFlags() {
+        m_requireKeyRelease = false;
+        m_actionJustCompleted = false;
+        m_cooldownTimer = 0.0f;
+        m_isInteracting = false;
+        LOG_DEBUG("All blocking flags reset for door: " + getName());
+    }
+
+    /**
+     * @brief Получает текущее значение таймера кулдауна
+     * @return Значение таймера в секундах
+     */
+    float getCooldownTimer() const { return m_cooldownTimer; }
 
 
 private:

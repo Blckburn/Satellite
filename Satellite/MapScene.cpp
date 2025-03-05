@@ -340,18 +340,18 @@ void MapScene::handleEvent(const SDL_Event& event) {
         }
     }
     // Обработка отпускания клавиши E
-    else if (event.type == SDL_KEYUP && event.key.keysym.sym == SDLK_e) {
-        LOG_DEBUG("E key released, resetting key release requirement");
-        // Проверяем, есть ли текущие взаимодействия с дверями через EntityManager
-        for (auto& obj : m_entityManager->getInteractiveObjects()) {
-            if (auto doorObj = std::dynamic_pointer_cast<Door>(obj)) {
-                if (doorObj->isRequiringKeyRelease()) {
-                    LOG_DEBUG("Resetting key release requirement for door: " + doorObj->getName());
-                    doorObj->resetKeyReleaseRequirement();
-                }
+else if (event.type == SDL_KEYUP && event.key.keysym.sym == SDLK_e) {
+    LOG_DEBUG("E key released, resetting key release requirement");
+    // Проверяем, есть ли текущие взаимодействия с дверями через EntityManager
+    for (auto& obj : m_entityManager->getInteractiveObjects()) {
+        if (auto doorObj = std::dynamic_pointer_cast<Door>(obj)) {
+            if (doorObj->isRequiringKeyRelease()) {
+                LOG_DEBUG("Resetting key release requirement for door: " + doorObj->getName());
+                doorObj->resetKeyReleaseRequirement();
             }
         }
     }
+}
 
     // Передаем события в базовый класс
     Scene::handleEvent(event);

@@ -12,12 +12,12 @@ Door::Door(const std::string& name, TileMap* tileMap, MapScene* parentScene, int
     m_tileX(0),
     m_tileY(0),
     m_parentScene(parentScene),
-    m_interactionSystem(nullptr), // Инициализация указателя на InteractionSystem
+    m_interactionSystem(nullptr),
     m_isVertical(false),
     m_biomeType(biomeType),
     m_isInteracting(false),
     m_interactionTimer(0.0f),
-    m_interactionRequiredTime(1.0f), // 1 секунда для полного открытия/закрытия
+    m_interactionRequiredTime(1.0f),
     m_interactionProgress(0.0f),
     m_actionJustCompleted(false),
     m_cooldownTimer(0.0f),
@@ -51,8 +51,9 @@ Door::Door(const std::string& name, TileMap* tileMap, MapScene* parentScene, int
     // Устанавливаем подсказку в зависимости от биома и состояния
     updateInteractionHint();
 
-    // Устанавливаем высоту преграды
-    setHeight(0.3f);
+    // ИЗМЕНЕНО: Устанавливаем высоту преграды для закрытой двери
+    // Используем низкую высоту, чтобы дверь выглядела как часть пола, а не как куб
+    setHeight(0.2f);
 }
 
 
@@ -178,16 +179,48 @@ void Door::update(float deltaTime) {
         }
     }
 
-    // Добавляем периодическую проверку интерактивности
-    static float checkTimer = 0.0f;
-    checkTimer += deltaTime;
+    // НОВАЯ ДИАГНОСТИКА: Периодическая проверка состояния тайла двери
+    static float doorCheckTimer = 0.0f;
+    doorCheckTimer += deltaTime;
 
-    if (checkTimer > 1.0f) {  // Проверяем каждую секунду
-        checkTimer = 0.0f;
+    if (doorCheckTimer > 1.0f) {  // Проверяем каждую секунду
+        doorCheckTimer = 0.0f;
 
+        // Проверяем, что дверь интерактивна
         if (!isInteractable()) {
             LOG_WARNING("Door found to be non-interactable during update: " + getName());
             setInteractable(true);  // Принудительное восстановление интерактивности
+        }
+
+        // НОВАЯ ПРОВЕРКА: Проверяем состояние тайла под дверью
+        if (m_tileMap && m_tileMap->isValidCoordinate(m_tileX, m_tileY)) {
+            MapTile* tile = m_tileMap->getTile(m_tileX, m_tileY);
+            if (tile) {
+                TileType currentType = tile->getType();
+                bool isWalkable = tile->isWalkable();
+
+                // Проверка соответствия состояния тайла и двери
+                if (!m_isOpen && currentType != TileType::DOOR) {
+                    LOG_WARNING("Closed door has wrong tile type: " + std::to_string(static_cast<int>(currentType)) +
+                        ", fixing to DOOR");
+                    m_tileMap->setTileType(m_tileX, m_tileY, TileType::DOOR);
+
+                    // Проверяем проходимость тайла после изменения типа
+                    tile = m_tileMap->getTile(m_tileX, m_tileY);
+                    if (tile && tile->isWalkable()) {
+                        LOG_WARNING("Closed door tile is walkable, fixing to non-walkable");
+                        tile->setWalkable(false);
+                    }
+                }
+                else if (m_isOpen && isWalkable != true) {
+                    LOG_WARNING("Open door tile is not walkable, fixing");
+                    tile->setWalkable(true);
+                }
+                else if (!m_isOpen && isWalkable == true) {
+                    LOG_WARNING("Closed door tile is walkable, fixing to non-walkable");
+                    tile->setWalkable(false);
+                }
+            }
         }
     }
 }
@@ -250,8 +283,21 @@ bool Door::startInteraction() {
         ", isInteracting: " + std::string(m_isInteracting ? "true" : "false") +
         ", cooldownTimer: " + std::to_string(m_cooldownTimer));
 
+    // ВАЖНОЕ ИЗМЕНЕНИЕ: Принудительно сбрасываем блокирующие флаги для закрытой двери
+    if (!m_isOpen) {
+        if (m_requireKeyRelease) {
+            LOG_DEBUG("Принудительно сбрасываем флаг requireKeyRelease для закрытой двери");
+            m_requireKeyRelease = false;
+        }
+
+        if (m_actionJustCompleted) {
+            LOG_DEBUG("Принудительно сбрасываем флаг actionJustCompleted и cooldownTimer для закрытой двери");
+            m_actionJustCompleted = false;
+            m_cooldownTimer = 0.0f;
+        }
+    }
+
     // ВАЖНЫЙ ФИХ: Специальная обработка для открытых дверей
-    // Если дверь открыта, используем другую логику взаимодействия
     if (m_isOpen) {
         // Если дверь уже взаимодействует, не начинаем новое взаимодействие
         if (m_isInteracting) {
@@ -298,7 +344,7 @@ bool Door::startInteraction() {
 
     // 2. Проверка на кулдаун
     if (m_actionJustCompleted) {
-        LOG_DEBUG("Interaction blocked: action just completed, in cooldown");
+        LOG_DEBUG("Interaction blocked: action just completed, in cooldown: " + std::to_string(m_cooldownTimer));
         return false;
     }
 
@@ -352,23 +398,27 @@ void Door::completeInteraction() {
     setInteractable(true);
     setActive(true);
 
-    // Стандартный кулдаун 0.5 секунды
+    // Стандартный кулдаун сокращаем до 0.2 секунды (было 0.5)
     m_actionJustCompleted = true;
-    m_cooldownTimer = 0.5f;
+    m_cooldownTimer = 0.2f;
 
     // ВАЖНО - требуем отпускания клавиши перед следующим взаимодействием
-    m_requireKeyRelease = true;
+    m_requireKeyRelease = m_isOpen; // Только для открытых дверей требуем отпускания клавиши
 
     // Меняем состояние двери
     if (m_tileMap && m_tileMap->isValidCoordinate(m_tileX, m_tileY)) {
         MapTile* tile = m_tileMap->getTile(m_tileX, m_tileY);
         if (tile) {
             if (!m_isOpen) {
-                // Открываем дверь - делаем тайл проходимым
+                // ОТКРЫВАЕМ ДВЕРЬ
+
+                // 1. Сначала делаем тайл проходимым
                 tile->setWalkable(true);
+
+                // 2. Затем меняем состояние объекта
                 m_isOpen = true;
 
-                // Определяем тип пола в зависимости от биома
+                // 3. Определяем подходящий тип пола для текущего биома
                 TileType floorType = TileType::FLOOR;
                 switch (m_biomeType) {
                 case 1: // FOREST
@@ -385,87 +435,102 @@ void Door::completeInteraction() {
                     break;
                 }
 
-                // Обновляем тип тайла для открытой двери
+                // 4. Явно устанавливаем тип тайла
                 m_tileMap->setTileType(m_tileX, m_tileY, floorType);
 
-                // Визуально "открываем" дверь - делаем полупрозрачной
+                // 5. Повторно устанавливаем проходимость, чтобы убедиться, что она не сбросилась
+                tile = m_tileMap->getTile(m_tileX, m_tileY); // Получаем тайл заново на случай, если он изменился
+                if (tile) {
+                    tile->setWalkable(true);
+                }
+
+                // 6. Визуально "открываем" дверь - делаем полупрозрачной и уменьшаем высоту
                 SDL_Color openColor = m_closedColor;
                 openColor.a = 128; // Полупрозрачная
                 setColor(openColor);
 
-                // Уведомляем систему взаимодействия
+                // НОВОЕ: Уменьшаем высоту для открытой двери, чтобы она была на уровне пола
+                setHeight(0.05f); // Очень низкая высота, чтобы дверь была почти на уровне пола
+
+                // 7. Уведомляем систему взаимодействия
                 if (m_interactionSystem) {
                     m_interactionSystem->rememberDoorPosition(m_tileX, m_tileY, getName());
                 }
+
+                LOG_INFO("Door opened successfully: " + getName() + " at position (" +
+                    std::to_string(m_tileX) + ", " + std::to_string(m_tileY) + ")");
             }
             else {
-                // Закрываем дверь - делаем тайл непроходимым
-                tile->setWalkable(false);
-                m_isOpen = false;
+                // ЗАКРЫВАЕМ ДВЕРЬ
 
-                // Устанавливаем тип тайла как DOOR (или оставляем текущий тип)
-                // Дверь остаётся визуально дверью, но становится непроходимой
-                TileType doorType = TileType::DOOR;
+                // 1. Явно устанавливаем тип тайла на DOOR
+                m_tileMap->setTileType(m_tileX, m_tileY, TileType::DOOR);
 
-                // Можно выбрать соответствующий тип для биома, но не стену
-                switch (m_biomeType) {
-                case 1: // FOREST
-                    doorType = TileType::DOOR;  // Можно создать специальный тип для закрытой двери
-                    break;
-                case 2: // DESERT
-                    doorType = TileType::DOOR;
-                    break;
-                case 3: // TUNDRA
-                    doorType = TileType::DOOR;
-                    break;
-                case 4: // VOLCANIC
-                    doorType = TileType::DOOR;
-                    break;
+                // 2. Получаем тайл заново (на случай, если он изменился после установки типа)
+                tile = m_tileMap->getTile(m_tileX, m_tileY);
+
+                // 3. Делаем тайл непроходимым
+                if (tile) {
+                    tile->setWalkable(false);
+
+                    // 4. Убеждаемся, что тип не изменился после установки проходимости
+                    MapTile* verifyTile = m_tileMap->getTile(m_tileX, m_tileY);
+                    if (verifyTile && verifyTile->getType() != TileType::DOOR) {
+                        LOG_WARNING("Tile type changed after setting walkability! Restoring to DOOR");
+                        m_tileMap->setTileType(m_tileX, m_tileY, TileType::DOOR);
+                    }
                 }
 
-                // Устанавливаем тип тайла для закрытой двери
-                m_tileMap->setTileType(m_tileX, m_tileY, doorType);
+                // 5. Обновляем состояние объекта
+                m_isOpen = false;
 
-                // Визуально "закрываем" дверь
+                // 6. Визуально "закрываем" дверь - восстанавливаем непрозрачность
                 setColor(m_closedColor);
 
-                // Уведомляем систему взаимодействия
+                // НОВОЕ: Устанавливаем высоту для закрытой двери, чтобы она выглядела как препятствие,
+                // но не как полноценный куб
+                setHeight(0.2f); // Низкая высота, но достаточная для визуализации препятствия
+
+                // 7. Сбрасываем блокирующие флаги для закрытой двери
+                m_requireKeyRelease = false;
+                m_actionJustCompleted = false;
+                m_cooldownTimer = 0.0f;
+
+                // 8. Уведомляем систему взаимодействия
                 if (m_interactionSystem) {
                     m_interactionSystem->forgetDoorPosition(m_tileX, m_tileY);
                 }
+
+                LOG_INFO("Door closed successfully: " + getName() + " at position (" +
+                    std::to_string(m_tileX) + ", " + std::to_string(m_tileY) + ")");
             }
         }
     }
 
-    // НОВЫЙ КОД: Проверка и восстановление позиции, если она изменилась
+    // ПРОВЕРКА И КОРРЕКЦИЯ ПОЗИЦИИ ДВЕРИ
     if (getPosition().x != oldX || getPosition().y != oldY || getPosition().z != oldZ) {
         LOG_WARNING("Door position changed during interaction! Fixing...");
         setPosition(oldX, oldY, oldZ);
     }
 
-    // НОВЫЙ КОД: Принудительно устанавливаем точную позицию двери на основе тайловых координат
+    // Принудительно устанавливаем точную позицию двери на основе тайловых координат
     setPosition(static_cast<float>(m_tileX), static_cast<float>(m_tileY), getPosition().z);
 
-    // НОВЫЙ КОД: Принудительно обновляем радиус взаимодействия
+    // Принудительно обновляем радиус взаимодействия
     setInteractionRadius(1.8f);
 
     // Обновляем подсказку для нового состояния
     updateInteractionHint();
 
-    LOG_INFO("Door " + getName() + " interaction completed, now " +
-        (m_isOpen ? "open" : "closed") + ", position: (" +
-        std::to_string(getPosition().x) + ", " +
-        std::to_string(getPosition().y) + ")");
-
     // Дополнительный диагностический вывод
     LOG_DEBUG("Door state after completion - Name: " + getName() +
         ", isOpen: " + std::string(m_isOpen ? "true" : "false") +
+        ", height: " + std::to_string(getHeight()) +
         ", isInteractable: " + std::string(isInteractable() ? "true" : "false") +
         ", isActive: " + std::string(isActive() ? "true" : "false") +
         ", requireKeyRelease: " + std::string(m_requireKeyRelease ? "true" : "false") +
         ", actionJustCompleted: " + std::string(m_actionJustCompleted ? "true" : "false"));
 }
-
 void Door::updateInteractionProgress(float progress) {
     // Ограничиваем прогресс в пределах 0.0-1.0
     m_interactionProgress = std::max(0.0f, std::min(1.0f, progress));
@@ -489,16 +554,48 @@ void Door::updateTileWalkability() {
         // Получаем текущий тайл
         MapTile* tile = m_tileMap->getTile(m_tileX, m_tileY);
         if (tile) {
-            // Если дверь открыта, используем тип DOOR (проходимый)
-            // Если дверь закрыта, используем тип WALL (непроходимый)
-            TileType tileType = m_isOpen ? TileType::DOOR : TileType::WALL;
+            // Устанавливаем проходимость в зависимости от состояния двери
+            tile->setWalkable(m_isOpen);
 
-            // Обновляем тип тайла
-            m_tileMap->setTileType(m_tileX, m_tileY, tileType);
+            // Устанавливаем тип тайла в зависимости от состояния
+            if (m_isOpen) {
+                // Для открытой двери используем тип пола в зависимости от биома
+                TileType floorType = TileType::FLOOR;
+                switch (m_biomeType) {
+                case 1: // FOREST
+                    floorType = TileType::GRASS;
+                    break;
+                case 2: // DESERT
+                    floorType = TileType::SAND;
+                    break;
+                case 3: // TUNDRA
+                    floorType = TileType::SNOW;
+                    break;
+                case 4: // VOLCANIC
+                    floorType = TileType::STONE;
+                    break;
+                }
+                m_tileMap->setTileType(m_tileX, m_tileY, floorType);
+            }
+            else {
+                // Для закрытой двери используем тип OBSTACLE (НЕ DOOR)
+                // Это позволит избежать дублирования визуализации
+                m_tileMap->setTileType(m_tileX, m_tileY, TileType::OBSTACLE);
+            }
+
+            // Дополнительная проверка после установки типа
+            tile = m_tileMap->getTile(m_tileX, m_tileY);
+            if (tile) {
+                // Повторно устанавливаем проходимость для уверенности
+                tile->setWalkable(m_isOpen);
+            }
         }
     }
-}
 
+    LOG_DEBUG("Door tile updated: " + getName() + ", isOpen=" +
+        std::string(m_isOpen ? "true" : "false") + ", position=(" +
+        std::to_string(m_tileX) + "," + std::to_string(m_tileY) + ")");
+}
 void Door::updateInteractionHint() {
     // В зависимости от состояния двери и биома, устанавливаем соответствующую подсказку
     std::string action;
