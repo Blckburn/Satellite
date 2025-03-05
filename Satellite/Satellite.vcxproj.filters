@@ -81,6 +81,30 @@
     <ClInclude Include="PickupItem.h">
       <Filter>include</Filter>
     </ClInclude>
+    <ClInclude Include="Door.h">
+      <Filter>include</Filter>
+    </ClInclude>
+    <ClInclude Include="EntityManager.h">
+      <Filter>include</Filter>
+    </ClInclude>
+    <ClInclude Include="InteractionSystem.h">
+      <Filter>include</Filter>
+    </ClInclude>
+    <ClInclude Include="RenderingSystem.h">
+      <Filter>include</Filter>
+    </ClInclude>
+    <ClInclude Include="Satellite.h">
+      <Filter>include</Filter>
+    </ClInclude>
+    <ClInclude Include="Terminal.h">
+      <Filter>include</Filter>
+    </ClInclude>
+    <ClInclude Include="UIManager.h">
+      <Filter>include</Filter>
+    </ClInclude>
+    <ClInclude Include="WorldGenerator.h">
+      <Filter>include</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="Engine.cpp">
@@ -132,6 +156,27 @@
       <Filter>src</Filter>
     </ClCompile>
     <ClCompile Include="PickupItem.cpp">
+      <Filter>src</Filter>
+    </ClCompile>
+    <ClCompile Include="Door.cpp">
+      <Filter>src</Filter>
+    </ClCompile>
+    <ClCompile Include="EntityManager.cpp">
+      <Filter>src</Filter>
+    </ClCompile>
+    <ClCompile Include="InteractionSystem.cpp">
+      <Filter>src</Filter>
+    </ClCompile>
+    <ClCompile Include="RenderingSystem.cpp">
+      <Filter>src</Filter>
+    </ClCompile>
+    <ClCompile Include="Terminal.cpp">
+      <Filter>src</Filter>
+    </ClCompile>
+    <ClCompile Include="UIManager.cpp">
+      <Filter>src</Filter>
+    </ClCompile>
+    <ClCompile Include="WorldGenerator.cpp">
       <Filter>src</Filter>
     </ClCompile>
   </ItemGroup>
