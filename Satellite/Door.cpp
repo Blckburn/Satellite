@@ -141,30 +141,35 @@ void Door::update(float deltaTime) {
     // Базовое обновление интерактивного объекта
     InteractiveObject::update(deltaTime);
 
-    // Если действие только что завершилось, обновляем таймер кулдауна
+    // Обновление кулдауна после завершения действия
     if (m_actionJustCompleted) {
         m_cooldownTimer -= deltaTime;
-
         if (m_cooldownTimer <= 0.0f) {
             m_actionJustCompleted = false;
-            m_cooldownTimer = 0.0f;
         }
     }
 
-    // Если идет процесс взаимодействия, обновляем таймер
+    // Если дверь находится в процессе взаимодействия
     if (m_isInteracting) {
+        // Инкрементируем таймер и прогресс
         m_interactionTimer += deltaTime;
 
-        // Обновляем прогресс взаимодействия
-        updateInteractionProgress(m_interactionTimer / m_interactionRequiredTime);
+        // Вычисляем прогресс как отношение текущего времени к требуемому
+        // с ограничением до диапазона [0.0, 1.0]
+        m_interactionProgress = std::min(1.0f, m_interactionTimer / m_interactionRequiredTime);
 
-        // Если достигнуто требуемое время, завершаем взаимодействие
-        if (m_interactionTimer >= m_interactionRequiredTime) {
-            completeInteraction();
+        // Логирование прогресса (для отладки)
+        if (static_cast<int>(m_interactionProgress * 100) % 10 == 0) {
+            LOG_DEBUG("Door interaction progress: " + std::to_string(m_interactionProgress * 100) + "%");
         }
 
-        // Обновляем подсказку с прогрессом
+        // Обновляем подсказку с текущим прогрессом
         updateInteractionHintDuringCast();
+
+        // Если процесс завершен
+        if (m_interactionProgress >= 1.0f) {
+            completeInteraction();
+        }
     }
 }
 
@@ -265,7 +270,7 @@ bool Door::startInteraction() {
 
     // Начинаем процесс взаимодействия
     m_isInteracting = true;
-    m_interactionTimer = 0.0f;
+    m_interactionTimer = 0.0f;  // Явно сбрасываем таймер
     m_interactionProgress = 0.0f;
 
     // Обновляем подсказку для отображения процесса
@@ -275,7 +280,6 @@ bool Door::startInteraction() {
 
     return true;
 }
-
 
 void Door::cancelInteraction() {
     if (!m_isInteracting) {
@@ -472,11 +476,8 @@ void Door::updateInteractionHintDuringCast() {
         }
     }
 
-    // Добавляем прогресс в процентах
-    int progress = static_cast<int>(m_interactionProgress * 100.0f);
-    action += "... " + std::to_string(progress) + "%";
-
-    setInteractionHint("Hold E: " + action);
+    // Показываем только действие без процента
+    setInteractionHint("Hold E: " + action + "...");
 }
 
 const std::string& Door::getInteractionHint() const {
@@ -495,11 +496,11 @@ void Door::render(SDL_Renderer* renderer, IsometricRenderer* isoRenderer, int ce
         int screenX, screenY;
         isoRenderer->worldToDisplay(doorX, doorY, doorZ, centerX, centerY, screenX, screenY);
 
-        // Размеры индикатора
-        int progressWidth = 40;
-        int progressHeight = 6;
+        // Увеличенные размеры индикатора
+        int progressWidth = 90;   // Увеличен (было 40)
+        int progressHeight = 22;  // Увеличен (было 6)
 
-        // Рисуем фон индикатора
+        // Рисуем фон индикатора (прозрачный черный)
         SDL_Rect progressBg = {
             screenX - progressWidth / 2,
             screenY - progressHeight / 2,
@@ -533,6 +534,43 @@ void Door::render(SDL_Renderer* renderer, IsometricRenderer* isoRenderer, int ce
         // Рамка индикатора
         SDL_SetRenderDrawColor(renderer, 255, 255, 255, 200);
         SDL_RenderDrawRect(renderer, &progressBg);
+
+        // Отображаем процент прямо на индикаторе
+        int progressPercent = static_cast<int>(m_interactionProgress * 100.0f);
+        std::string progressText = std::to_string(progressPercent) + "%";
+
+        // Проверяем, доступен ли менеджер ресурсов через сцену
+        if (m_parentScene && m_parentScene->getEngine() &&
+            m_parentScene->getEngine()->getResourceManager() &&
+            m_parentScene->getEngine()->getResourceManager()->hasFont("default")) {
+
+            // Отрисовываем текст с процентом
+            m_parentScene->getEngine()->getResourceManager()->renderText(
+                renderer,
+                progressText,
+                "default",
+                screenX,              // Центр прогресс-бара по X
+                screenY,              // Центр прогресс-бара по Y
+                { 255, 255, 255, 255 } // Белый текст
+            );
+        }
+        else {
+            // Если шрифт недоступен, рисуем текст как примитив (упрощенно)
+            // Позиция для текста - по центру прогресс-бара
+            SDL_Rect textRect = {
+                screenX - 15,   // Примерный центр
+                screenY - 6,    // Чуть выше центра прогресс-бара
+                30,             // Примерная ширина текста
+                12              // Примерная высота текста
+            };
+
+            // Создаем полупрозрачный черный фон для текста, чтобы он был лучше виден
+            SDL_SetRenderDrawColor(renderer, 0, 0, 0, 120);
+            SDL_RenderFillRect(renderer, &textRect);
+
+            // Здесь мы просто рисуем прямоугольник с текстом внутри
+            // так как у нас нет прямого способа рендеринга текста без ресурсов
+        }
     }
 }
 
@@ -549,4 +587,9 @@ void Door::resetKeyReleaseRequirement() {
  */
 bool Door::isRequiringKeyRelease() const {
     return m_requireKeyRelease;
+}
+
+void Door::setInteractionTime(float time) {
+    m_interactionRequiredTime = std::max(0.1f, time); // Минимум 0.1 секунды
+    LOG_DEBUG("Door " + getName() + " interaction time set to " + std::to_string(m_interactionRequiredTime) + " seconds");
 }

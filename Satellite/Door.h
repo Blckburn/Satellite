@@ -14,13 +14,6 @@ class InteractionSystem; // Добавляем forward declaration для Intera
  */
 class Door : public InteractiveObject, public std::enable_shared_from_this<Door> {
 public:
-    /**
-     * @brief Конструктор
-     * @param name Имя двери
-     * @param tileMap Указатель на карту для обновления проходимости
-     * @param parentScene Указатель на родительскую сцену
-     */
-    Door(const std::string& name, TileMap* tileMap, MapScene* parentScene = nullptr);
 
     /**
      * @brief Инициализация двери
@@ -142,6 +135,23 @@ public:
      */
     bool isRequiringKeyRelease() const;
 
+    /**
+ * @brief Устанавливает время, необходимое для открытия/закрытия двери
+ * @param time Время в секундах
+ */
+    void setInteractionTime(float time);
+
+    /**
+ * @brief Получает необходимое время для взаимодействия
+ * @return Время в секундах
+ */
+    float getInteractionRequiredTime() const { return m_interactionRequiredTime; }
+
+    /**
+    * @brief Завершает процесс взаимодействия с дверью
+    */
+    void completeInteraction();
+
 
 private:
     /**
@@ -159,10 +169,7 @@ private:
      */
     void updateInteractionHintDuringCast();
 
-    /**
-     * @brief Завершает процесс взаимодействия с дверью
-     */
-    void completeInteraction();
+   
 
     bool m_isOpen;          ///< Флаг состояния двери (открыта/закрыта)
     TileMap* m_tileMap;     ///< Указатель на карту для обновления проходимости

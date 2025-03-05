@@ -198,6 +198,13 @@ void MapScene::handleEvent(const SDL_Event& event) {
         }
     }
 
+    // Обработка нажатия клавиши E
+    if (event.type == SDL_KEYDOWN && event.key.keysym.sym == SDLK_e) {
+        if (m_interactionSystem) {
+            m_interactionSystem->handleInteraction();
+        }
+    }
+
     // Передаем события в базовый класс
     Scene::handleEvent(event);
 }
@@ -217,6 +224,15 @@ void MapScene::update(float deltaTime) {
 
     // 4. Обновление всех сущностей через EntityManager
     m_entityManager->update(deltaTime);
+
+    // Проверка удержания клавиши E для взаимодействия с дверями
+    const Uint8* keyState = SDL_GetKeyboardState(NULL);
+    if (keyState[SDL_SCANCODE_E]) {
+        // Обновляем состояние взаимодействия если клавиша E удерживается
+        if (m_interactionSystem) {
+            m_interactionSystem->updateInteraction(deltaTime);
+        }
+    }
 
     // 5. Обновление базового класса
     Scene::update(deltaTime);
@@ -272,6 +288,7 @@ void MapScene::generateTestMap() {
 
     // Генерируем карту и получаем стартовую позицию игрока
     auto playerStartPos = m_worldGenerator->generateTestMap(m_currentBiome);
+    m_worldGenerator->generateDoors(0.4f, 8);
 
     // Устанавливаем игрока на стартовую позицию
     if (m_player) {

@@ -356,3 +356,28 @@ std::string InteractionSystem::truncateText(const std::string& text, size_t maxL
     // Отрезаем часть текста и добавляем многоточие
     return text.substr(0, maxLength - 3) + "...";
 }
+
+void InteractionSystem::updateInteraction(float deltaTime) {
+    // Проверяем, идет ли взаимодействие с дверью
+    if (m_isInteractingWithDoor && m_currentInteractingDoor) {
+        // Обновляем время взаимодействия
+        float currentProgress = m_currentInteractingDoor->getInteractionProgress();
+        float newProgress = currentProgress + deltaTime / m_currentInteractingDoor->getInteractionRequiredTime();
+
+        // Обновляем прогресс
+        m_currentInteractingDoor->updateInteractionProgress(newProgress);
+
+        // Добавим логирование для отладки
+        if (static_cast<int>(newProgress * 100) % 10 == 0 &&
+            static_cast<int>(currentProgress * 100) / 10 != static_cast<int>(newProgress * 100) / 10) {
+            LOG_DEBUG("Door interaction progress: " + std::to_string(newProgress * 100) + "%");
+        }
+
+        // Если достигли 100%, завершаем взаимодействие
+        if (newProgress >= 1.0f) {
+            m_currentInteractingDoor->completeInteraction();
+            m_isInteractingWithDoor = false;
+            m_currentInteractingDoor = nullptr;
+        }
+    }
+}

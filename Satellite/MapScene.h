@@ -168,6 +168,13 @@ public:
      */
     void initializeDoors();
 
+
+    /**
+ * @brief Получение указателя на движок
+ * @return Указатель на объект Engine
+ */
+    Engine* getEngine() const { return m_engine; }
+
 private:
     /**
      * @brief Отрисовка интерактивных объектов
@@ -178,9 +185,6 @@ private:
     void renderInteractiveObjects(SDL_Renderer* renderer, int centerX, int centerY);
 
 
-
-
-private:
     std::shared_ptr<WorldGenerator> m_worldGenerator;    ///< Генератор игрового мира
     std::shared_ptr<EntityManager> m_entityManager;      ///< Менеджер сущностей
     std::shared_ptr<InteractionSystem> m_interactionSystem; ///< Система взаимодействия

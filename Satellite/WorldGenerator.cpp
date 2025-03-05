@@ -863,6 +863,9 @@ std::shared_ptr<Door> WorldGenerator::createTestDoor(float x, float y, const std
     // Устанавливаем позицию
     door->setPosition(x, y, 0.3f);
 
+    // Устанавливаем время взаимодействия (2-3 секунды)
+    door->setInteractionTime(2.5f);
+
     // Инициализируем дверь
     if (!door->initialize()) {
         LOG_ERROR("Failed to initialize door: " + name);
@@ -872,28 +875,6 @@ std::shared_ptr<Door> WorldGenerator::createTestDoor(float x, float y, const std
     // Добавляем дверь на сцену
     m_mapScene->addInteractiveObject(door);
 
-    // Генерируем описание биома для логов
-    std::string biomeDesc;
-    switch (m_currentBiome) {
-    case 1:
-        biomeDesc = "Forest (branches)";
-        break;
-    case 2:
-        biomeDesc = "Desert (sand pile)";
-        break;
-    case 3:
-        biomeDesc = "Tundra (ice barrier)";
-        break;
-    case 4:
-        biomeDesc = "Volcanic (rock pile)";
-        break;
-    default:
-        biomeDesc = "Unknown";
-        break;
-    }
-
-    LOG_INFO("Created " + biomeDesc + " obstacle: " + name + " at position (" +
-        std::to_string(x) + ", " + std::to_string(y) + ")");
     return door;
 }
 

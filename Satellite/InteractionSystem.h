@@ -130,6 +130,13 @@ public:
      */
     static std::string truncateText(const std::string& text, size_t maxLength);
 
+    /**
+     * @brief Обновляет текущее взаимодействие при удержании клавиши
+     * @param deltaTime Время, прошедшее с предыдущего кадра
+     */
+    void updateInteraction(float deltaTime);
+
+
 private:
     std::shared_ptr<Player> m_player;                  ///< Указатель на игрока
     std::shared_ptr<EntityManager> m_entityManager;    ///< Указатель на менеджер сущностей
