@@ -7,6 +7,7 @@
 #include "Camera.h"
 #include "Player.h"
 #include "CollisionSystem.h"
+#include "EntityManager.h" // Добавляем новый заголовочный файл
 #include <SDL.h>
 #include <memory>
 #include "InteractiveObject.h"
@@ -236,7 +237,8 @@ private:
 
 private:
     std::shared_ptr<WorldGenerator> m_worldGenerator;  ///< Генератор игрового мира
-    std::vector<std::shared_ptr<InteractiveObject>> m_interactiveObjects;  ///< Интерактивные объекты на сцене
+    std::shared_ptr<EntityManager> m_entityManager;    ///< Менеджер сущностей
+    std::vector<std::shared_ptr<InteractiveObject>> m_interactiveObjects;  ///< Интерактивные объекты на сцене (будет удалено после полной миграции)
     float m_interactionPromptTimer;                    ///< Таймер для отображения подсказки
     std::string m_interactionPrompt;                   ///< Текст подсказки для взаимодействия
     bool m_showInteractionPrompt;                      ///< Флаг отображения подсказки

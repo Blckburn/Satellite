@@ -14,7 +14,7 @@ MapScene::MapScene(const std::string& name, Engine* engine)
     : Scene(name), m_engine(engine), m_showDebug(false),
     m_currentInteractingDoor(nullptr), m_isInteractingWithDoor(false),
     m_currentInteractingTerminal(nullptr), m_isDisplayingTerminalInfo(false) {
-    // Примечание: Игрок будет инициализирован в методе initialize()
+    // EntityManager будет инициализирован в методе initialize()
 }
 
 MapScene::~MapScene() {
@@ -36,6 +36,9 @@ bool MapScene::initialize() {
         return false;
     }
 
+    // 3.5. Инициализация EntityManager
+    m_entityManager = std::make_shared<EntityManager>(m_tileMap);
+
     // 4. Инициализация рендерера тайлов
     m_tileRenderer = std::make_shared<TileRenderer>(m_isoRenderer.get());
 
@@ -48,6 +51,9 @@ bool MapScene::initialize() {
         std::cerr << "Failed to initialize player" << std::endl;
         return false;
     }
+
+    // Добавляем игрока в EntityManager как сущность
+    m_entityManager->addEntity(m_player);
 
     // 5.1. Связываем игрока с системой коллизий
     if (m_player && m_collisionSystem) {
@@ -70,7 +76,7 @@ bool MapScene::initialize() {
         }
     }
 
-    // 5.3. Инициализация генератора мира (НОВОЕ)
+    // 5.3. Инициализация генератора мира
     m_worldGenerator = std::make_shared<WorldGenerator>(
         m_tileMap, m_engine, this, m_player);
 
@@ -89,7 +95,7 @@ bool MapScene::initialize() {
     m_showInteractionPrompt = false;
     m_interactionPrompt = "";
 
-    std::cout << "Interactive objects initialized: " << m_interactiveObjects.size() << std::endl;
+    std::cout << "Interactive objects initialized: " << m_entityManager->getInteractiveObjects().size() << std::endl;
 
     return true;
 }
@@ -309,18 +315,8 @@ void MapScene::update(float deltaTime) {
         }
     }
 
-    // Обновление интерактивных объектов
-    auto it = m_interactiveObjects.begin();
-    while (it != m_interactiveObjects.end()) {
-        if ((*it)->isActive()) {
-            (*it)->update(deltaTime);
-            ++it;
-        }
-        else {
-            // Удаляем неактивные объекты
-            it = m_interactiveObjects.erase(it);
-        }
-    }
+    // Обновление всех сущностей через EntityManager
+    m_entityManager->update(deltaTime);
 
     // Обновление таймера подсказки
     if (m_showInteractionPrompt) {
@@ -335,8 +331,12 @@ void MapScene::update(float deltaTime) {
     if (m_player) {
         float playerX = m_player->getFullX();
         float playerY = m_player->getFullY();
+        float playerDirX = m_player->getDirectionX();
+        float playerDirY = m_player->getDirectionY();
 
-        std::shared_ptr<InteractiveObject> nearestObject = findNearestInteractiveObject(playerX, playerY);
+        std::shared_ptr<InteractiveObject> nearestObject = m_entityManager->findNearestInteractiveObject(
+            playerX, playerY, playerDirX, playerDirY);
+
         if (nearestObject && nearestObject->isInteractable()) {
             // Создаем подсказку с информацией об объекте
             std::string objectName = nearestObject->getName();
@@ -470,8 +470,17 @@ void MapScene::render(SDL_Renderer* renderer) {
 }
 
 void MapScene::generateTestMap() {
-    // Очищаем список интерактивных объектов
-    m_interactiveObjects.clear();
+    // Очищаем менеджер сущностей
+    if (m_entityManager) {
+        m_entityManager->clear();
+
+        // Добавляем игрока обратно после очистки
+        if (m_player) {
+            m_entityManager->addEntity(m_player);
+        }
+    }
+
+    // Очищаем список открытых дверей
     m_openDoors.clear();
 
     // Используем WorldGenerator для генерации карты
@@ -715,7 +724,7 @@ void MapScene::renderWithBlockSorting(SDL_Renderer* renderer, int centerX, int c
     std::vector<RenderObject> objectsToRender;
 
     // 6.0. Добавляем интерактивные объекты в список сортировки
-    for (auto& object : m_interactiveObjects) {
+    for (auto& object : m_entityManager->getInteractiveObjects()) {
         if (!object->isActive()) continue;
 
         float objectX = object->getPosition().x;
@@ -1342,16 +1351,13 @@ void MapScene::renderPlayer(SDL_Renderer* renderer, int centerX, int centerY, fl
 
 void MapScene::addInteractiveObject(std::shared_ptr<InteractiveObject> object) {
     if (object) {
-        m_interactiveObjects.push_back(object);
+        m_entityManager->addInteractiveObject(object);
     }
 }
 
 void MapScene::removeInteractiveObject(std::shared_ptr<InteractiveObject> object) {
-    if (!object) return;
-
-    auto it = std::find(m_interactiveObjects.begin(), m_interactiveObjects.end(), object);
-    if (it != m_interactiveObjects.end()) {
-        m_interactiveObjects.erase(it);
+    if (object) {
+        m_entityManager->removeInteractiveObject(object);
     }
 }
 
@@ -1360,6 +1366,8 @@ void MapScene::handleInteraction() {
 
     float playerX = m_player->getFullX();
     float playerY = m_player->getFullY();
+    float playerDirX = m_player->getDirectionX();
+    float playerDirY = m_player->getDirectionY();
 
     // Если уже идет взаимодействие с дверью, не ищем новые объекты
     if (m_isInteractingWithDoor && m_currentInteractingDoor) {
@@ -1367,7 +1375,8 @@ void MapScene::handleInteraction() {
         return;
     }
 
-    std::shared_ptr<InteractiveObject> nearestObject = findNearestInteractiveObject(playerX, playerY);
+    std::shared_ptr<InteractiveObject> nearestObject = m_entityManager->findNearestInteractiveObject(
+        playerX, playerY, playerDirX, playerDirY);
 
     // Если уже отображается информация терминала и найден ближайший объект
     if (m_isDisplayingTerminalInfo && m_currentInteractingTerminal && nearestObject) {
@@ -1476,10 +1485,6 @@ void MapScene::handleInteraction() {
 }
 
 std::shared_ptr<InteractiveObject> MapScene::findNearestInteractiveObject(float playerX, float playerY) {
-    std::shared_ptr<InteractiveObject> nearest = nullptr;
-    float minDistanceSquared = std::numeric_limits<float>::max();
-
-    // Получаем направление взгляда игрока
     float playerDirX = 0.0f;
     float playerDirY = 0.0f;
 
@@ -1488,73 +1493,11 @@ std::shared_ptr<InteractiveObject> MapScene::findNearestInteractiveObject(float 
         playerDirY = m_player->getDirectionY();
     }
 
-    // Если направление не определено (игрок стоит на месте), используем последнее известное направление
-    if (std::abs(playerDirX) < 0.01f && std::abs(playerDirY) < 0.01f) {
-        // Если нет направления, будем считать, что игрок может взаимодействовать
-        // с объектами в любом направлении (классическое поведение)
-        playerDirX = 0.0f;
-        playerDirY = 0.0f;
-    }
-
-    for (auto& object : m_interactiveObjects) {
-        if (!object->isActive() || !object->isInteractable()) continue;
-
-        // Координаты объекта
-        float objectX = object->getPosition().x;
-        float objectY = object->getPosition().y;
-
-        // Вычисление вектора от игрока к объекту
-        float dx = objectX - playerX;
-        float dy = objectY - playerY;
-        float distanceSquared = dx * dx + dy * dy;
-
-        // Получение радиуса взаимодействия объекта
-        float interactionRadius = object->getInteractionRadius();
-        float radiusSquared = interactionRadius * interactionRadius;
-
-        // Если объект находится в радиусе взаимодействия
-        if (distanceSquared <= radiusSquared) {
-            // Проверяем угол между направлением игрока и направлением к объекту,
-            // если у игрока есть направление движения
-            bool objectInFront = true; // По умолчанию считаем, что объект перед игроком
-
-            if (std::abs(playerDirX) > 0.01f || std::abs(playerDirY) > 0.01f) {
-                // Нормализуем вектор направления к объекту
-                float length = std::sqrt(distanceSquared);
-                if (length > 0.0001f) { // Избегаем деления на ноль
-                    float normDx = dx / length;
-                    float normDy = dy / length;
-
-                    // Вычисляем скалярное произведение (dot product) между направлением игрока
-                    // и нормализованным вектором направления к объекту
-                    float dotProduct = playerDirX * normDx + playerDirY * normDy;
-
-                    // Если скалярное произведение положительное, объект находится перед игроком
-                    // (в пределах 180-градусного сектора)
-                    objectInFront = dotProduct > 0.0f;
-
-                    // Для более узкого сектора можно использовать порог больше 0
-                    // например, dotProduct > 0.5f будет давать 60-градусный сектор
-                    // а dotProduct > 0.7071f будет давать 45-градусный сектор
-
-                    // Используем более узкий сектор для точности выбора объекта
-                    objectInFront = dotProduct > 0.5f; // Примерно 60 градусов в каждую сторону
-                }
-            }
-
-            // Если объект находится перед игроком и ближе предыдущего ближайшего
-            if (objectInFront && distanceSquared < minDistanceSquared) {
-                minDistanceSquared = distanceSquared;
-                nearest = object;
-            }
-        }
-    }
-
-    return nearest;
+    return m_entityManager->findNearestInteractiveObject(playerX, playerY, playerDirX, playerDirY);
 }
 
 void MapScene::renderInteractiveObjects(SDL_Renderer* renderer, int centerX, int centerY) {
-    for (auto& object : m_interactiveObjects) {
+    for (auto& object : m_entityManager->getInteractiveObjects()) {
         if (!object->isActive()) continue;
 
         // Получаем данные объекта
@@ -1562,10 +1505,6 @@ void MapScene::renderInteractiveObjects(SDL_Renderer* renderer, int centerX, int
         float objectY = object->getPosition().y;
         float objectZ = object->getPosition().z;
         SDL_Color color = object->getColor();
-
-        // Создаем визуальное представление объекта
-        // В зависимости от типа объекта, можно использовать разное отображение
-        // Здесь для примера используем объемный тайл для всех объектов
 
         // Вычисляем приоритет для правильной Z-сортировки
         float priority = calculateZOrderPriority(objectX, objectY, objectZ);
@@ -1601,6 +1540,7 @@ void MapScene::renderInteractiveObjects(SDL_Renderer* renderer, int centerX, int
         );
     }
 }
+
 
 void MapScene::renderInteractionPrompt(SDL_Renderer* renderer) {
     // Проверяем, должна ли подсказка отображаться
