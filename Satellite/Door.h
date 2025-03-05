@@ -6,7 +6,8 @@
 
 // Forward declarations
 class MapScene;
-class IsometricRenderer; // Добавляем forward declaration для IsometricRenderer
+class IsometricRenderer;
+class InteractionSystem; // Добавляем forward declaration для InteractionSystem
 
 /**
  * @brief Класс для представления двери в игровом мире
@@ -57,6 +58,12 @@ public:
      * @param scene Указатель на сцену
      */
     void setParentScene(MapScene* scene) { m_parentScene = scene; }
+
+    /**
+     * @brief Установка системы взаимодействия
+     * @param system Указатель на систему взаимодействия
+     */
+    void setInteractionSystem(InteractionSystem* system) { m_interactionSystem = system; }
 
     /**
      * @brief Задает ориентацию двери (горизонтальная/вертикальная)
@@ -125,8 +132,8 @@ public:
 
 
     /**
- * @brief Сбрасывает флаг требования отпускания клавиши
- */
+     * @brief Сбрасывает флаг требования отпускания клавиши
+     */
     void resetKeyReleaseRequirement();
 
     /**
@@ -163,7 +170,8 @@ private:
     int m_tileY;            ///< Y координата тайла, на котором находится дверь
     SDL_Color m_openColor;  ///< Цвет двери в открытом состоянии
     SDL_Color m_closedColor; ///< Цвет двери в закрытом состоянии
-    MapScene* m_parentScene; ///< Указатель на родительскую сцену
+    MapScene* m_parentScene; ///< Указатель на родительскую сцену (для обратной совместимости)
+    InteractionSystem* m_interactionSystem; ///< Указатель на систему взаимодействия
     bool m_isVertical;         ///< Ориентация двери (вертикальная/горизонтальная)
     int m_biomeType;           ///< Тип биома для визуализации
 

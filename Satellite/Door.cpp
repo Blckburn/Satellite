@@ -12,6 +12,7 @@ Door::Door(const std::string& name, TileMap* tileMap, MapScene* parentScene, int
     m_tileX(0),
     m_tileY(0),
     m_parentScene(parentScene),
+    m_interactionSystem(nullptr), // Инициализация указателя на InteractionSystem
     m_isVertical(false),
     m_biomeType(biomeType),
     m_isInteracting(false),
@@ -53,6 +54,7 @@ Door::Door(const std::string& name, TileMap* tileMap, MapScene* parentScene, int
     // Устанавливаем высоту преграды
     setHeight(0.3f);
 }
+
 
 bool Door::initialize() {
     // Получаем координаты тайла из позиции двери
@@ -167,8 +169,82 @@ void Door::update(float deltaTime) {
 }
 
 bool Door::interact(Player* player) {
-    // Вместо мгновенного выполнения действия, начинаем процесс взаимодействия
-    return startInteraction();
+    // Базовая проверка интерактивности
+    if (!isInteractable()) {
+        return false;
+    }
+
+    // Завершаем взаимодействие
+    if (m_isOpen) {
+        // Если дверь уже открыта, закрываем её
+        m_isOpen = false;
+
+        // Изменяем тип тайла на непроходимый (стена)
+        int tileX = static_cast<int>(getPosition().x);
+        int tileY = static_cast<int>(getPosition().y);
+
+        if (m_tileMap) {
+            m_tileMap->setTileType(tileX, tileY, TileType::WALL);
+            m_tileMap->setTileWalkable(tileX, tileY, false);
+        }
+
+        // Обновляем подсказку
+        setInteractionHint("Press E to open door");
+
+        // Сообщаем системе взаимодействия, что дверь закрыта
+        if (m_interactionSystem) {
+            m_interactionSystem->forgetDoorPosition(tileX, tileY);
+        }
+
+        LOG_INFO("Door " + getName() + " closed");
+    }
+    else {
+        // Открываем дверь
+        m_isOpen = true;
+
+        // Изменяем тип тайла на проходимый (пол)
+        int tileX = static_cast<int>(getPosition().x);
+        int tileY = static_cast<int>(getPosition().y);
+
+        if (m_tileMap) {
+            TileType floorType = TileType::FLOOR;
+
+            // Определяем тип пола в зависимости от биома
+            switch (m_biomeType) {
+            case 1: // FOREST
+                floorType = TileType::GRASS;
+                break;
+            case 2: // DESERT
+                floorType = TileType::SAND;
+                break;
+            case 3: // TUNDRA
+                floorType = TileType::SNOW;
+                break;
+            case 4: // VOLCANIC
+                floorType = TileType::STONE;
+                break;
+            }
+
+            m_tileMap->setTileType(tileX, tileY, floorType);
+            m_tileMap->setTileWalkable(tileX, tileY, true);
+        }
+
+        // Обновляем подсказку
+        setInteractionHint("Press E to close door");
+
+        // Сообщаем системе взаимодействия, что дверь открыта
+        if (m_interactionSystem) {
+            m_interactionSystem->rememberDoorPosition(tileX, tileY, getName());
+        }
+
+        LOG_INFO("Door " + getName() + " opened");
+    }
+
+    // Требуем отпускания клавиши для следующего взаимодействия
+    m_requireKeyRelease = true;
+
+    // Вызываем базовый метод взаимодействия
+    return InteractiveObject::interact(player);
 }
 
 bool Door::startInteraction() {
@@ -243,9 +319,9 @@ void Door::completeInteraction() {
                 openColor.a = 128; // Полупрозрачная
                 setColor(openColor);
 
-                // Если у двери есть родительская сцена, информируем её
-                if (m_parentScene) {
-                    m_parentScene->rememberDoorPosition(m_tileX, m_tileY, getName());
+                // Уведомляем ТОЛЬКО через InteractionSystem, НЕ используем m_parentScene
+                if (m_interactionSystem) {
+                    m_interactionSystem->rememberDoorPosition(m_tileX, m_tileY, getName());
                 }
             }
             else {
@@ -256,9 +332,9 @@ void Door::completeInteraction() {
                 // Визуально "закрываем" дверь
                 setColor(m_closedColor);
 
-                // Если у двери есть родительская сцена, информируем её
-                if (m_parentScene) {
-                    m_parentScene->forgetDoorPosition(m_tileX, m_tileY);
+                // Уведомляем ТОЛЬКО через InteractionSystem, НЕ используем m_parentScene
+                if (m_interactionSystem) {
+                    m_interactionSystem->forgetDoorPosition(m_tileX, m_tileY);
                 }
             }
         }

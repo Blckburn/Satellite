@@ -7,13 +7,10 @@
 #include "Camera.h"
 #include "Player.h"
 #include "CollisionSystem.h"
-#include "EntityManager.h" // Добавляем новый заголовочный файл
+#include "EntityManager.h"
+#include "InteractionSystem.h"
 #include <SDL.h>
 #include <memory>
-#include "InteractiveObject.h"
-#include "PickupItem.h"
-#include "Door.h" 
-#include "Terminal.h"
 #include <vector>
 
 // Предварительное объявление классов
@@ -164,57 +161,19 @@ public:
     void removeInteractiveObject(std::shared_ptr<InteractiveObject> object);
 
     /**
-     * @brief Запоминает позицию открытой двери
+     * @brief Метод для создания двери (используется как callback для InteractionSystem)
      * @param x X-координата двери
      * @param y Y-координата двери
      * @param name Имя двери
      */
-    void rememberDoorPosition(int x, int y, const std::string& name);
+    void createDoor(float x, float y, const std::string& name);
 
     /**
-     * @brief Проверяет, является ли тайл открытой дверью
-     * @param x X-координата
-     * @param y Y-координата
-     * @return true, если это открытая дверь
+     * @brief Инициализирует все двери на карте, устанавливая для них систему взаимодействия
      */
-    bool isOpenDoorTile(int x, int y) const;
-
-    /**
-     * @brief Закрывает дверь на указанной позиции
-     * @param x X-координата
-     * @param y Y-координата
-     */
-    void closeDoorAtPosition(int x, int y);
-
-    /**
-     * @brief Удаляет информацию о двери из списка открытых дверей
-     * @param x X-координата двери
-     * @param y Y-координата двери
-     */
-    void forgetDoorPosition(int x, int y);
+    void initializeDoors();
 
 private:
-    /**
-     * @brief Сокращает длинный текст, если он превышает максимальную длину
-     * @param text Исходный текст
-     * @param maxLength Максимальная длина текста
-     * @return Сокращенный текст или исходный текст, если он короче maxLength
-     */
-    std::string truncateText(const std::string& text, size_t maxLength);
-
-    /**
-     * @brief Обработка взаимодействия с объектами
-     */
-    void handleInteraction();
-
-    /**
-     * @brief Поиск ближайшего интерактивного объекта
-     * @param playerX X-координата игрока
-     * @param playerY Y-координата игрока
-     * @return Указатель на ближайший интерактивный объект или nullptr
-     */
-    std::shared_ptr<InteractiveObject> findNearestInteractiveObject(float playerX, float playerY);
-
     /**
      * @brief Отрисовка интерактивных объектов
      * @param renderer SDL рендерер
@@ -236,49 +195,17 @@ private:
     void renderTerminalInfo(SDL_Renderer* renderer);
 
 private:
-    std::shared_ptr<WorldGenerator> m_worldGenerator;  ///< Генератор игрового мира
-    std::shared_ptr<EntityManager> m_entityManager;    ///< Менеджер сущностей
-    std::vector<std::shared_ptr<InteractiveObject>> m_interactiveObjects;  ///< Интерактивные объекты на сцене (будет удалено после полной миграции)
-    float m_interactionPromptTimer;                    ///< Таймер для отображения подсказки
-    std::string m_interactionPrompt;                   ///< Текст подсказки для взаимодействия
-    bool m_showInteractionPrompt;                      ///< Флаг отображения подсказки
-    Engine* m_engine;                                  ///< Указатель на движок
-    std::shared_ptr<TileMap> m_tileMap;                ///< Карта
-    std::shared_ptr<IsometricRenderer> m_isoRenderer;  ///< Изометрический рендерер
-    std::shared_ptr<TileRenderer> m_tileRenderer;      ///< Рендерер тайлов
-    std::shared_ptr<Camera> m_camera;                  ///< Камера
-    std::shared_ptr<Player> m_player;                  ///< Игрок
-    std::shared_ptr<CollisionSystem> m_collisionSystem;///< Система коллизий
+    std::shared_ptr<WorldGenerator> m_worldGenerator;    ///< Генератор игрового мира
+    std::shared_ptr<EntityManager> m_entityManager;      ///< Менеджер сущностей
+    std::shared_ptr<InteractionSystem> m_interactionSystem; ///< Система взаимодействия
+    Engine* m_engine;                                    ///< Указатель на движок
+    std::shared_ptr<TileMap> m_tileMap;                  ///< Карта
+    std::shared_ptr<IsometricRenderer> m_isoRenderer;    ///< Изометрический рендерер
+    std::shared_ptr<TileRenderer> m_tileRenderer;        ///< Рендерер тайлов
+    std::shared_ptr<Camera> m_camera;                    ///< Камера
+    std::shared_ptr<Player> m_player;                    ///< Игрок
+    std::shared_ptr<CollisionSystem> m_collisionSystem;  ///< Система коллизий
 
-    bool m_showDebug;                                  ///< Флаг отображения отладочной информации
-    int m_currentBiome;                                ///< Текущий биом карты
-
-    // Структура для хранения информации об открытых дверях
-    struct OpenDoorInfo {
-        int tileX;          // X-координата двери
-        int tileY;          // Y-координата двери
-        std::string name;   // Имя двери
-    };
-
-    std::vector<OpenDoorInfo> m_openDoors;             ///< Список открытых дверей
-
-    /**
-    * @brief Указатель на текущую дверь, с которой идет взаимодействие
-    */
-    std::shared_ptr<Door> m_currentInteractingDoor;
-
-    /**
-     * @brief Флаг, показывающий, идет ли в данный момент взаимодействие с дверью
-     */
-    bool m_isInteractingWithDoor;
-
-    /**
-     * @brief Указатель на текущий терминал, с которым идет взаимодействие
-     */
-    std::shared_ptr<Terminal> m_currentInteractingTerminal;
-
-    /**
-     * @brief Флаг, показывающий, отображается ли сейчас информация терминала
-     */
-    bool m_isDisplayingTerminalInfo;
+    bool m_showDebug;                                    ///< Флаг отображения отладочной информации
+    int m_currentBiome;                                  ///< Текущий биом карты
 };

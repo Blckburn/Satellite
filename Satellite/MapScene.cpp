@@ -11,13 +11,12 @@
 
 
 MapScene::MapScene(const std::string& name, Engine* engine)
-    : Scene(name), m_engine(engine), m_showDebug(false),
-    m_currentInteractingDoor(nullptr), m_isInteractingWithDoor(false),
-    m_currentInteractingTerminal(nullptr), m_isDisplayingTerminalInfo(false) {
-    // EntityManager будет инициализирован в методе initialize()
+    : Scene(name), m_engine(engine), m_showDebug(false) {
+    // Остальные члены будут инициализированы в методе initialize()
 }
 
 MapScene::~MapScene() {
+    // Очистка ресурсов
 }
 
 bool MapScene::initialize() {
@@ -64,7 +63,15 @@ bool MapScene::initialize() {
         std::cerr << "Warning: Failed to link player to collision system" << std::endl;
     }
 
-    // 5.2. Загрузка шрифта для интерфейса
+    // 5.2. Инициализация системы взаимодействия
+    m_interactionSystem = std::make_shared<InteractionSystem>(m_player, m_entityManager, m_tileMap);
+
+    // Устанавливаем функцию обратного вызова для создания дверей
+    m_interactionSystem->setCreateDoorCallback([this](float x, float y, const std::string& name) {
+        this->createDoor(x, y, name);
+        });
+
+    // 5.3. Загрузка шрифта для интерфейса
     if (m_engine && m_engine->getResourceManager()) {
         // Пытаемся загрузить шрифт (путь нужно адаптировать под вашу структуру проекта)
         bool fontLoaded = m_engine->getResourceManager()->loadFont("default", "assets/fonts/Font.ttf", 16);
@@ -76,11 +83,9 @@ bool MapScene::initialize() {
         }
     }
 
-    // 5.3. Инициализация генератора мира
+    // 5.4. Инициализация генератора мира
     m_worldGenerator = std::make_shared<WorldGenerator>(
         m_tileMap, m_engine, this, m_player);
-
-    m_isDisplayingTerminalInfo = false;
 
     // 6. Генерация тестовой карты
     generateTestMap();
@@ -90,15 +95,15 @@ bool MapScene::initialize() {
 
     std::cout << "MapScene initialized successfully" << std::endl;
 
-    // Инициализация параметров для интерактивных объектов
-    m_interactionPromptTimer = 0.0f;
-    m_showInteractionPrompt = false;
-    m_interactionPrompt = "";
-
-    std::cout << "Interactive objects initialized: " << m_entityManager->getInteractiveObjects().size() << std::endl;
-
     return true;
 }
+
+void MapScene::createDoor(float x, float y, const std::string& name) {
+    if (m_worldGenerator) {
+        m_worldGenerator->createTestDoor(x, y, name);
+    }
+}
+
 
 bool MapScene::canMoveDiagonally(int fromX, int fromY, int toX, int toY) {
     // Используем систему коллизий, если она доступна
@@ -204,15 +209,14 @@ void MapScene::handleEvent(const SDL_Event& event) {
             break;
 
         case SDLK_e:
-            // Начало взаимодействия с объектами
-            handleInteraction();
+            // Обработка взаимодействия через InteractionSystem
+            m_interactionSystem->handleInteraction();
             break;
 
         case SDLK_ESCAPE:
             // Если отображается информация терминала, скрываем её
-            if (m_isDisplayingTerminalInfo && m_currentInteractingTerminal) {
-                m_isDisplayingTerminalInfo = false;
-                m_currentInteractingTerminal = nullptr;
+            if (m_interactionSystem->isDisplayingTerminalInfo()) {
+                m_interactionSystem->closeTerminalInfo();
                 LOG_INFO("Terminal info closed with ESC key");
                 return; // Прерываем обработку, чтобы ESC не влиял на другие системы
             }
@@ -220,18 +224,10 @@ void MapScene::handleEvent(const SDL_Event& event) {
             break;
         }
     }
-    // Добавляем обработку отпускания клавиши E для системы каст-времени
+    // Добавляем обработку отпускания клавиши E для системы каст-времени с дверями
     else if (event.type == SDL_KEYUP && event.key.keysym.sym == SDLK_e) {
-        // Если идет взаимодействие с дверью, отменяем его при отпускании клавиши
-        if (m_currentInteractingDoor) {
-            m_currentInteractingDoor->cancelInteraction();
-            m_currentInteractingDoor = nullptr;
-            m_isInteractingWithDoor = false;
-            LOG_INFO("Interaction with door cancelled (key released)");
-        }
-
-        // Сбрасываем флаг требования отпускания клавиши у всех дверей
-        for (auto& obj : m_interactiveObjects) {
+        // Проверяем, есть ли текущие взаимодействия с дверями
+        for (auto& obj : m_entityManager->getInteractiveObjects()) {
             if (auto doorObj = std::dynamic_pointer_cast<Door>(obj)) {
                 if (doorObj->isRequiringKeyRelease()) {
                     doorObj->resetKeyReleaseRequirement();
@@ -244,15 +240,6 @@ void MapScene::handleEvent(const SDL_Event& event) {
     Scene::handleEvent(event);
 }
 
-std::string MapScene::truncateText(const std::string& text, size_t maxLength) {
-    if (text.length() <= maxLength) {
-        return text;
-    }
-
-    // Отрезаем часть текста и добавляем многоточие
-    return text.substr(0, maxLength - 3) + "...";
-}
-
 void MapScene::update(float deltaTime) {
     // 1. Обнаружение нажатий клавиш и обновление игрока
     if (m_player) {
@@ -263,166 +250,13 @@ void MapScene::update(float deltaTime) {
     // 2. Обновление камеры
     m_camera->update(deltaTime);
 
-    // Проверяем состояние текущего взаимодействия с дверью
-    if (m_isInteractingWithDoor && m_currentInteractingDoor) {
-        // Если дверь перестала взаимодействовать (завершила каст или игрок слишком далеко)
-        if (!m_currentInteractingDoor->isInteracting()) {
-            m_currentInteractingDoor = nullptr;
-            m_isInteractingWithDoor = false;
-        }
-        // Проверяем, не отошел ли игрок слишком далеко от двери
-        else if (m_player) {
-            float playerX = m_player->getFullX();
-            float playerY = m_player->getFullY();
-            float doorX = m_currentInteractingDoor->getPosition().x;
-            float doorY = m_currentInteractingDoor->getPosition().y;
+    // 3. Обновление системы взаимодействия
+    m_interactionSystem->update(deltaTime);
 
-            float dx = playerX - doorX;
-            float dy = playerY - doorY;
-            float distanceToDoorsSquared = dx * dx + dy * dy;
-
-            // Если игрок отошел дальше радиуса взаимодействия, отменяем взаимодействие
-            float interactionRadius = m_currentInteractingDoor->getInteractionRadius();
-            if (distanceToDoorsSquared > interactionRadius * interactionRadius) {
-                m_currentInteractingDoor->cancelInteraction();
-                m_currentInteractingDoor = nullptr;
-                m_isInteractingWithDoor = false;
-                LOG_INFO("Interaction with door cancelled (player moved away)");
-            }
-        }
-    }
-
-    // Обновление состояния терминала
-    if (m_isDisplayingTerminalInfo && m_currentInteractingTerminal) {
-        // Проверяем, не отошел ли игрок слишком далеко от терминала
-        if (m_player) {
-            float playerX = m_player->getFullX();
-            float playerY = m_player->getFullY();
-            float terminalX = m_currentInteractingTerminal->getPosition().x;
-            float terminalY = m_currentInteractingTerminal->getPosition().y;
-
-            float dx = playerX - terminalX;
-            float dy = playerY - terminalY;
-            float distanceSquared = dx * dx + dy * dy;
-
-            // Если игрок отошел дальше радиуса взаимодействия, скрываем информацию
-            float interactionRadius = m_currentInteractingTerminal->getInteractionRadius();
-            if (distanceSquared > interactionRadius * interactionRadius * 1.5f) {
-                m_currentInteractingTerminal = nullptr;
-                m_isDisplayingTerminalInfo = false;
-                LOG_INFO("Terminal info hidden (player moved away)");
-            }
-        }
-    }
-
-    // Обновление всех сущностей через EntityManager
+    // 4. Обновление всех сущностей через EntityManager
     m_entityManager->update(deltaTime);
 
-    // Обновление таймера подсказки
-    if (m_showInteractionPrompt) {
-        m_interactionPromptTimer += deltaTime;
-        // Скрываем подсказку через 2 секунды
-        if (m_interactionPromptTimer > 2.0f) {
-            m_showInteractionPrompt = false;
-        }
-    }
-
-    // Проверка наличия объектов для взаимодействия
-    if (m_player) {
-        float playerX = m_player->getFullX();
-        float playerY = m_player->getFullY();
-        float playerDirX = m_player->getDirectionX();
-        float playerDirY = m_player->getDirectionY();
-
-        std::shared_ptr<InteractiveObject> nearestObject = m_entityManager->findNearestInteractiveObject(
-            playerX, playerY, playerDirX, playerDirY);
-
-        if (nearestObject && nearestObject->isInteractable()) {
-            // Создаем подсказку с информацией об объекте
-            std::string objectName = nearestObject->getName();
-            InteractiveType objectType = nearestObject->getInteractiveType();
-
-            // Проверяем, есть ли у объекта уже своя подсказка
-            // Для дверей попробуем использовать их собственную подсказку
-            if (auto doorObj = std::dynamic_pointer_cast<Door>(nearestObject)) {
-                // Для дверей используем их собственную подсказку
-                m_interactionPrompt = doorObj->getInteractionHint();
-                m_showInteractionPrompt = true;
-                m_interactionPromptTimer = 0.0f;
-            }
-            // Добавляем обработку для терминалов
-            else if (auto terminalObj = std::dynamic_pointer_cast<Terminal>(nearestObject)) {
-                // Для терминалов используем их собственную подсказку
-                m_interactionPrompt = terminalObj->getInteractionHint();
-                m_showInteractionPrompt = true;
-                m_interactionPromptTimer = 0.0f;
-            }
-            else {
-                // Для других типов объектов формируем подсказку, как раньше
-                std::string actionText = "interact with";
-                std::string typeText = "";
-
-                switch (objectType) {
-                case InteractiveType::PICKUP:
-                    actionText = "pick up";
-
-                    // Если это предмет, можем получить дополнительную информацию о типе предмета
-                    if (auto pickupItem = std::dynamic_pointer_cast<PickupItem>(nearestObject)) {
-                        PickupItem::ItemType itemType = pickupItem->getItemType();
-                        switch (itemType) {
-                        case PickupItem::ItemType::RESOURCE:
-                            typeText = " [Resource]";
-                            break;
-                        case PickupItem::ItemType::WEAPON:
-                            typeText = " [Weapon]";
-                            break;
-                        case PickupItem::ItemType::ARMOR:
-                            typeText = " [Armor]";
-                            break;
-                        case PickupItem::ItemType::CONSUMABLE:
-                            typeText = " [Consumable]";
-                            break;
-                        case PickupItem::ItemType::KEY:
-                            typeText = " [Key]";
-                            break;
-                        default:
-                            typeText = " [Item]";
-                            break;
-                        }
-                    }
-                    break;
-                case InteractiveType::DOOR:
-                    actionText = "open/close";
-                    typeText = " [Door]";
-                    break;
-                case InteractiveType::SWITCH:
-                    actionText = "activate";
-                    typeText = " [Switch]";
-                    break;
-                case InteractiveType::TERMINAL:
-                    actionText = "use";
-                    typeText = " [Terminal]";
-                    break;
-                case InteractiveType::CONTAINER:
-                    actionText = "open";
-                    typeText = " [Container]";
-                    break;
-                default:
-                    // Для других типов используем подсказку по умолчанию
-                    break;
-                }
-
-                // Формируем финальный текст подсказки
-                // Сокращаем имя объекта, если оно слишком длинное
-                std::string truncatedName = truncateText(objectName, 20); // Ограничиваем длину имени объекта
-                m_interactionPrompt = "Press E to " + actionText + " " + objectName + typeText;
-                m_showInteractionPrompt = true;
-                m_interactionPromptTimer = 0.0f;
-            }
-        }
-    }
-
-    // 3. Обновление базового класса
+    // 5. Обновление базового класса
     Scene::update(deltaTime);
 }
 
@@ -459,14 +293,27 @@ void MapScene::render(SDL_Renderer* renderer) {
     }
 
     // Отрисовка подсказки для взаимодействия
-    if (m_showInteractionPrompt) {
+    if (m_interactionSystem->shouldShowInteractionPrompt()) {
         renderInteractionPrompt(renderer);
     }
 
     // Отрисовка информации терминала
-    if (m_isDisplayingTerminalInfo && m_currentInteractingTerminal) {
+    if (m_interactionSystem->isDisplayingTerminalInfo() && m_interactionSystem->getCurrentTerminal()) {
         renderTerminalInfo(renderer);
     }
+}
+
+void MapScene::initializeDoors() {
+    // Проходим по всем интерактивным объектам, полученным через EntityManager
+    for (auto& obj : m_entityManager->getInteractiveObjects()) {
+        if (auto doorObj = std::dynamic_pointer_cast<Door>(obj)) {
+            // Устанавливаем систему взаимодействия для каждой двери
+            doorObj->setInteractionSystem(m_interactionSystem.get());
+            LOG_DEBUG("Door '" + doorObj->getName() + "' initialized with InteractionSystem");
+        }
+    }
+
+    LOG_INFO("All doors initialized with InteractionSystem");
 }
 
 void MapScene::generateTestMap() {
@@ -479,9 +326,6 @@ void MapScene::generateTestMap() {
             m_entityManager->addEntity(m_player);
         }
     }
-
-    // Очищаем список открытых дверей
-    m_openDoors.clear();
 
     // Используем WorldGenerator для генерации карты
     srand(static_cast<unsigned int>(time(nullptr)));
@@ -497,6 +341,15 @@ void MapScene::generateTestMap() {
         m_player->setSubX(0.5f);
         m_player->setSubY(0.5f);
     }
+
+    // Инициализируем двери с системой взаимодействия
+    // после того как WorldGenerator сгенерировал карту и добавил все объекты
+    initializeDoors();
+
+    LOG_INFO("Test map generated with biome " + std::to_string(m_currentBiome) +
+        " and player positioned at (" +
+        std::to_string(playerStartPos.first) + ", " +
+        std::to_string(playerStartPos.second) + ")");
 }
 
 void MapScene::detectKeyInput() {
@@ -1176,7 +1029,7 @@ void MapScene::renderWithBlockSorting(SDL_Renderer* renderer, int centerX, int c
     }
 
     // 10. Отрисовываем индикаторы прогресса над дверями
-    for (const auto& obj : m_interactiveObjects) {
+    for (auto& obj : m_entityManager->getInteractiveObjects()) {
         if (auto doorObj = std::dynamic_pointer_cast<Door>(obj)) {
             // Отрисовка прогресс-бара над дверью
             doorObj->render(renderer, m_isoRenderer.get(), centerX, centerY);
@@ -1351,9 +1204,16 @@ void MapScene::renderPlayer(SDL_Renderer* renderer, int centerX, int centerY, fl
 
 void MapScene::addInteractiveObject(std::shared_ptr<InteractiveObject> object) {
     if (object) {
+        // Если объект - дверь, устанавливаем для нее систему взаимодействия
+        if (auto doorObj = std::dynamic_pointer_cast<Door>(object)) {
+            doorObj->setInteractionSystem(m_interactionSystem.get());
+        }
+
+        // Добавляем объект в EntityManager
         m_entityManager->addInteractiveObject(object);
     }
 }
+
 
 void MapScene::removeInteractiveObject(std::shared_ptr<InteractiveObject> object) {
     if (object) {
@@ -1361,142 +1221,8 @@ void MapScene::removeInteractiveObject(std::shared_ptr<InteractiveObject> object
     }
 }
 
-void MapScene::handleInteraction() {
-    if (!m_player) return;
-
-    float playerX = m_player->getFullX();
-    float playerY = m_player->getFullY();
-    float playerDirX = m_player->getDirectionX();
-    float playerDirY = m_player->getDirectionY();
-
-    // Если уже идет взаимодействие с дверью, не ищем новые объекты
-    if (m_isInteractingWithDoor && m_currentInteractingDoor) {
-        // Продолжаем текущее взаимодействие
-        return;
-    }
-
-    std::shared_ptr<InteractiveObject> nearestObject = m_entityManager->findNearestInteractiveObject(
-        playerX, playerY, playerDirX, playerDirY);
-
-    // Если уже отображается информация терминала и найден ближайший объект
-    if (m_isDisplayingTerminalInfo && m_currentInteractingTerminal && nearestObject) {
-        // Проверяем, является ли ближайший объект текущим терминалом
-        if (nearestObject.get() == m_currentInteractingTerminal.get()) {
-            // Закрываем окно терминала при повторном нажатии E
-            m_isDisplayingTerminalInfo = false;
-            m_currentInteractingTerminal = nullptr;
-            LOG_INFO("Terminal info closed by pressing E again");
-            return;
-        }
-    }
-
-    if (nearestObject && nearestObject->isInteractable()) {
-        // Проверяем, является ли объект дверью
-        if (auto doorObj = std::dynamic_pointer_cast<Door>(nearestObject)) {
-            // Начинаем процесс взаимодействия с дверью (с каст-временем)
-            if (doorObj->startInteraction()) {
-                m_currentInteractingDoor = doorObj;
-                m_isInteractingWithDoor = true;
-                LOG_INFO("Started interaction process with door " + doorObj->getName());
-            }
-        }
-        // Проверяем, является ли объект терминалом
-        else if (auto terminalObj = std::dynamic_pointer_cast<Terminal>(nearestObject)) {
-            // Начинаем отображение информации терминала
-            if (terminalObj->interact(m_player.get())) {
-                m_currentInteractingTerminal = terminalObj;
-                m_isDisplayingTerminalInfo = true;
-                LOG_INFO("Started displaying information from terminal " + terminalObj->getName());
-
-                // Формируем сообщение о взаимодействии
-                std::string actionMessage = "Accessing " + nearestObject->getName();
-
-                // Отображаем подсказку с результатом взаимодействия
-                m_showInteractionPrompt = true;
-                m_interactionPromptTimer = 0.0f;
-                m_interactionPrompt = actionMessage;
-            }
-        }
-        else {
-            // Для других объектов используем обычное мгновенное взаимодействие
-            if (nearestObject->interact(m_player.get())) {
-                // Взаимодействие успешно
-                LOG_INFO("Interaction with " + nearestObject->getName() + " successful");
-
-                // Формируем сообщение о взаимодействии в зависимости от типа объекта
-                std::string actionMessage;
-
-                if (auto pickupItem = std::dynamic_pointer_cast<PickupItem>(nearestObject)) {
-                    // Для предметов
-                    PickupItem::ItemType itemType = pickupItem->getItemType();
-                    std::string itemTypeStr;
-
-                    switch (itemType) {
-                    case PickupItem::ItemType::RESOURCE:
-                        itemTypeStr = " [Resource]";
-                        break;
-                    case PickupItem::ItemType::WEAPON:
-                        itemTypeStr = " [Weapon]";
-                        break;
-                    case PickupItem::ItemType::ARMOR:
-                        itemTypeStr = " [Armor]";
-                        break;
-                    case PickupItem::ItemType::CONSUMABLE:
-                        itemTypeStr = " [Consumable]";
-                        break;
-                    case PickupItem::ItemType::KEY:
-                        itemTypeStr = " [Key]";
-                        break;
-                    default:
-                        itemTypeStr = " [Item]";
-                        break;
-                    }
-
-                    actionMessage = "Picked up " + nearestObject->getName() + itemTypeStr;
-                }
-                else {
-                    // Для других интерактивных объектов
-                    switch (nearestObject->getInteractiveType()) {
-                    case InteractiveType::SWITCH:
-                        actionMessage = "Activated " + nearestObject->getName();
-                        break;
-                    case InteractiveType::TERMINAL:
-                        actionMessage = "Used " + nearestObject->getName();
-                        break;
-                    case InteractiveType::CONTAINER:
-                        actionMessage = "Opened " + nearestObject->getName();
-                        break;
-                    default:
-                        actionMessage = "Interacted with " + nearestObject->getName();
-                        break;
-                    }
-                }
-
-                // Отображаем подсказку с результатом взаимодействия
-                m_showInteractionPrompt = true;
-                m_interactionPromptTimer = 0.0f;
-                m_interactionPrompt = actionMessage;
-            }
-        }
-    }
-    else {
-        LOG_INFO("No interactive objects in range");
-    }
-}
-
-std::shared_ptr<InteractiveObject> MapScene::findNearestInteractiveObject(float playerX, float playerY) {
-    float playerDirX = 0.0f;
-    float playerDirY = 0.0f;
-
-    if (m_player) {
-        playerDirX = m_player->getDirectionX();
-        playerDirY = m_player->getDirectionY();
-    }
-
-    return m_entityManager->findNearestInteractiveObject(playerX, playerY, playerDirX, playerDirY);
-}
-
 void MapScene::renderInteractiveObjects(SDL_Renderer* renderer, int centerX, int centerY) {
+    // КРИТИЧНОЕ ИСПРАВЛЕНИЕ: использовать m_entityManager вместо m_interactiveObjects
     for (auto& object : m_entityManager->getInteractiveObjects()) {
         if (!object->isActive()) continue;
 
@@ -1541,10 +1267,15 @@ void MapScene::renderInteractiveObjects(SDL_Renderer* renderer, int centerX, int
     }
 }
 
-
 void MapScene::renderInteractionPrompt(SDL_Renderer* renderer) {
     // Проверяем, должна ли подсказка отображаться
-    if (!m_showInteractionPrompt || m_interactionPrompt.empty()) {
+    if (!m_interactionSystem->shouldShowInteractionPrompt()) {
+        return;
+    }
+
+    // Получаем текст подсказки
+    std::string interactionPrompt = m_interactionSystem->getInteractionPrompt();
+    if (interactionPrompt.empty()) {
         return;
     }
 
@@ -1565,7 +1296,7 @@ void MapScene::renderInteractionPrompt(SDL_Renderer* renderer) {
 
         // Получаем размеры текста
         int textWidth, textHeight;
-        TTF_SizeText(font, m_interactionPrompt.c_str(), &textWidth, &textHeight);
+        TTF_SizeText(font, interactionPrompt.c_str(), &textWidth, &textHeight);
 
         // Добавляем отступы
         int padding = 20;
@@ -1611,14 +1342,10 @@ void MapScene::renderInteractionPrompt(SDL_Renderer* renderer) {
         SDL_SetRenderDrawColor(renderer, 100, 100, 100, 255);  // Темно-серая внутренняя рамка
         SDL_RenderDrawRect(renderer, &innerRect);
 
-        // Для очень длинных текстов, которые могут не поместиться даже в максимальную ширину,
-        // мы можем разбить текст на несколько строк или обрезать, но пока просто отрисуем
-        // с урезанной шириной текстуры
-
         // Отрисовываем текст с использованием ResourceManager
         m_engine->getResourceManager()->renderText(
             renderer,
-            m_interactionPrompt,
+            interactionPrompt,
             "default",
             windowWidth / 2,  // X-координата (центр экрана)
             windowHeight - 60 + promptHeight / 2, // Y-координата (центр подложки)
@@ -1628,115 +1355,73 @@ void MapScene::renderInteractionPrompt(SDL_Renderer* renderer) {
     else {
         // Отображаем подсказку только при первом взаимодействии, если нет доступных шрифтов
         static std::string lastPrompt;
-        if (lastPrompt != m_interactionPrompt) {
-            lastPrompt = m_interactionPrompt;
-            LOG_INFO("Interaction prompt: " + m_interactionPrompt);
+        if (lastPrompt != interactionPrompt) {
+            lastPrompt = interactionPrompt;
+            LOG_INFO("Interaction prompt: " + interactionPrompt);
         }
 
         // Если идет взаимодействие с дверью, рисуем полоску прогресса
-        if (m_isInteractingWithDoor && m_currentInteractingDoor) {
-            float progress = m_currentInteractingDoor->getInteractionProgress();
+        if (m_interactionSystem->isInteractingWithDoor()) {
+            // Получаем текущую дверь через EntityManager и проходим по всем интерактивным объектам
+            bool foundInteractingDoor = false;
+            float progress = 0.0f;
 
-            // Получаем размеры окна
-            int windowWidth, windowHeight;
-            SDL_GetRendererOutputSize(renderer, &windowWidth, &windowHeight);
-
-            // Создаем полоску прогресса под основной подсказкой
-            int progressWidth = 300;
-            int progressHeight = 8;
-
-            SDL_Rect progressBg = {
-                windowWidth / 2 - progressWidth / 2,
-                windowHeight - 40, // Расположение под текстом подсказки
-                progressWidth,
-                progressHeight
-            };
-
-            // Фон полоски (темно-серый, полупрозрачный)
-            SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_BLEND);
-            SDL_SetRenderDrawColor(renderer, 50, 50, 50, 180);
-            SDL_RenderFillRect(renderer, &progressBg);
-
-            // Заполненная часть полоски (зеленая)
-            SDL_Rect progressFill = progressBg;
-            progressFill.w = static_cast<int>(progressFill.w * progress);
-
-            // Цвет прогресс-бара зависит от того, открываем или закрываем
-            if (m_currentInteractingDoor->isOpen()) {
-                // Закрываем дверь - красный прогресс-бар
-                SDL_SetRenderDrawColor(renderer, 220, 50, 50, 220);
-            }
-            else {
-                // Открываем дверь - зеленый прогресс-бар
-                SDL_SetRenderDrawColor(renderer, 50, 220, 50, 220);
-            }
-            SDL_RenderFillRect(renderer, &progressFill);
-
-            // Рамка для полоски
-            SDL_SetRenderDrawColor(renderer, 180, 180, 180, 200);
-            SDL_RenderDrawRect(renderer, &progressBg);
-        }
-    }
-}   
-
-void MapScene::rememberDoorPosition(int x, int y, const std::string& name) {
-    // Добавляем информацию об открытой двери в список
-    m_openDoors.push_back({ x, y, name });
-    LOG_INFO("Remembered open door " + name + " at position (" + std::to_string(x) + ", " + std::to_string(y) + ")");
-}
-
-bool MapScene::isOpenDoorTile(int x, int y) const {
-    // Проверяем, есть ли в списке открытая дверь с указанными координатами
-    for (const auto& doorInfo : m_openDoors) {
-        if (doorInfo.tileX == x && doorInfo.tileY == y) {
-            return true;
-        }
-    }
-    return false;
-}
-
-void MapScene::closeDoorAtPosition(int x, int y) {
-    // Ищем дверь с указанными координатами
-    for (auto it = m_openDoors.begin(); it != m_openDoors.end(); ++it) {
-        if (it->tileX == x && it->tileY == y) {
-            // Запоминаем имя двери
-            std::string doorName = it->name;
-
-            // Удаляем информацию об открытой двери из списка
-            m_openDoors.erase(it);
-
-            // Сначала меняем тип тайла на WALL, чтобы гарантировать непроходимость
-            if (m_tileMap) {
-                m_tileMap->setTileType(x, y, TileType::WALL);
-                LOG_DEBUG("Door tile updated to WALL before creating new door entity");
+            for (auto& obj : m_entityManager->getInteractiveObjects()) {
+                if (auto doorObj = std::dynamic_pointer_cast<Door>(obj)) {
+                    if (doorObj->isInteracting()) {
+                        progress = doorObj->getInteractionProgress();
+                        foundInteractingDoor = true;
+                        break;
+                    }
+                }
             }
 
-            // Используем WorldGenerator для создания новой двери
-            if (m_worldGenerator) {
-                m_worldGenerator->createTestDoor(static_cast<float>(x), static_cast<float>(y), doorName);
-            }
+            if (foundInteractingDoor) {
+                // Получаем размеры окна
+                int windowWidth, windowHeight;
+                SDL_GetRendererOutputSize(renderer, &windowWidth, &windowHeight);
 
-            LOG_INFO("Closed door " + doorName + " at position (" + std::to_string(x) + ", " + std::to_string(y) + ")");
-            break;
+                // Создаем полоску прогресса под основной подсказкой
+                int progressWidth = 300;
+                int progressHeight = 8;
+
+                SDL_Rect progressBg = {
+                    windowWidth / 2 - progressWidth / 2,
+                    windowHeight - 40, // Расположение под текстом подсказки
+                    progressWidth,
+                    progressHeight
+                };
+
+                // Фон полоски (темно-серый, полупрозрачный)
+                SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_BLEND);
+                SDL_SetRenderDrawColor(renderer, 50, 50, 50, 180);
+                SDL_RenderFillRect(renderer, &progressBg);
+
+                // Заполненная часть полоски (зеленая или красная)
+                SDL_Rect progressFill = progressBg;
+                progressFill.w = static_cast<int>(progressFill.w * progress);
+
+                // Цвет прогресс-бара - зеленый для открытия, красный для закрытия
+                SDL_SetRenderDrawColor(renderer, 50, 220, 50, 220); // Зеленый
+                SDL_RenderFillRect(renderer, &progressFill);
+
+                // Рамка для полоски
+                SDL_SetRenderDrawColor(renderer, 180, 180, 180, 200);
+                SDL_RenderDrawRect(renderer, &progressBg);
+            }
         }
     }
 }
 
-void MapScene::forgetDoorPosition(int x, int y) {
-    // Ищем дверь с указанными координатами в списке открытых дверей
-    for (auto it = m_openDoors.begin(); it != m_openDoors.end(); ++it) {
-        if (it->tileX == x && it->tileY == y) {
-            LOG_INFO("Removed door " + it->name + " from open doors list");
-            m_openDoors.erase(it);
-            break;
-        }
-    }
-}
 
 void MapScene::renderTerminalInfo(SDL_Renderer* renderer) {
-    if (!m_isDisplayingTerminalInfo || !m_currentInteractingTerminal || !renderer) {
+    if (!m_interactionSystem->isDisplayingTerminalInfo() ||
+        !m_interactionSystem->getCurrentTerminal() ||
+        !renderer) {
         return;
     }
+
+    auto currentTerminal = m_interactionSystem->getCurrentTerminal();
 
     // Получаем размеры окна
     int windowWidth, windowHeight;
@@ -1756,38 +1441,13 @@ void MapScene::renderTerminalInfo(SDL_Renderer* renderer) {
         bool showCompromisedMessage = (currentTime % 3800) < 800; // 0.8 секунды каждые 3.8 секунды
 
         // Получаем записи терминала
-        const auto& entries = m_currentInteractingTerminal->getEntries();
+        const auto& entries = currentTerminal->getEntries();
 
         // Проверяем наличие записей
         if (entries.size() < 2) return;
 
         // Определяем, какую запись показывать
-        int selectedIndex = -1;
-
-        // Инициализируем индекс при первом вызове
-        if (m_currentInteractingTerminal->getSelectedEntryIndex() < 0) {
-            // Пропускаем первую запись, если она совпадает с названием терминала
-            int startIndex = (entries[0].first == m_currentInteractingTerminal->getName()) ? 1 : 0;
-
-            // Для выбора используем только содержательные записи, исключая предупреждение (последняя запись)
-            int endIndex = entries.size() - 1;
-
-            if (startIndex < endIndex) {
-                // Генерируем случайный индекс для интересных записей
-                selectedIndex = startIndex + rand() % (endIndex - startIndex);
-                // Сохраняем выбранный индекс
-                m_currentInteractingTerminal->setSelectedEntryIndex(selectedIndex);
-            }
-            else {
-                // Если нет других записей, используем первую
-                selectedIndex = startIndex;
-                m_currentInteractingTerminal->setSelectedEntryIndex(selectedIndex);
-            }
-        }
-        else {
-            // Используем ранее выбранный индекс
-            selectedIndex = m_currentInteractingTerminal->getSelectedEntryIndex();
-        }
+        int selectedIndex = currentTerminal->getSelectedEntryIndex();
 
         // Определяем текущий контент и заголовок
         std::string headerText;
@@ -1813,7 +1473,7 @@ void MapScene::renderTerminalInfo(SDL_Renderer* renderer) {
             contentText = entries[selectedIndex].second;
 
             // Определяем цвет в зависимости от типа терминала
-            switch (m_currentInteractingTerminal->getTerminalType()) {
+            switch (currentTerminal->getTerminalType()) {
             case Terminal::TerminalType::RESEARCH_SENSOR:
                 textColor = { 220, 255, 255, 255 }; // Светло-бирюзовый
                 bgColor = { 0, 45, 45, 220 }; // Темно-бирюзовый фон
@@ -1837,7 +1497,7 @@ void MapScene::renderTerminalInfo(SDL_Renderer* renderer) {
         }
         else {
             // Если нет подходящих записей, показываем стандартный текст
-            headerText = m_currentInteractingTerminal->getName();
+            headerText = currentTerminal->getName();
             contentText = "No data available.";
             textColor = { 255, 255, 255, 255 }; // Белый
             bgColor = { 0, 0, 0, 220 }; // Черный фон
@@ -1871,7 +1531,7 @@ void MapScene::renderTerminalInfo(SDL_Renderer* renderer) {
         SDL_RenderDrawRect(renderer, &infoRect);
 
         // Отображаем название терминала вверху (всегда)
-        std::string terminalTitle = m_currentInteractingTerminal->getName();
+        std::string terminalTitle = currentTerminal->getName();
 
         // Рисуем заголовок
         SDL_Surface* titleSurface = TTF_RenderText_Blended(font, terminalTitle.c_str(), textColor);
@@ -1997,6 +1657,6 @@ void MapScene::renderTerminalInfo(SDL_Renderer* renderer) {
     }
     else {
         // Если шрифты недоступны, просто выводим в лог
-        LOG_INFO("Terminal info display: " + m_currentInteractingTerminal->getName());
+        LOG_INFO("Terminal info display: " + currentTerminal->getName());
     }
 }

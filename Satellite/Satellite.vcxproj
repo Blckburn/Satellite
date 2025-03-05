@@ -145,6 +145,7 @@
     <ClInclude Include="Engine.h" />
     <ClInclude Include="Entity.h" />
     <ClInclude Include="EntityManager.h" />
+    <ClInclude Include="InteractionSystem.h" />
     <ClInclude Include="InteractiveObject.h" />
     <ClInclude Include="IsometricRenderer.h" />
     <ClInclude Include="Logger.h" />
@@ -171,6 +172,7 @@
     <ClCompile Include="Engine.cpp" />
     <ClCompile Include="Entity.cpp" />
     <ClCompile Include="EntityManager.cpp" />
+    <ClCompile Include="InteractionSystem.cpp" />
     <ClCompile Include="InteractiveObject.cpp" />
     <ClCompile Include="IsometricRenderer.cpp" />
     <ClCompile Include="main.cpp" />
