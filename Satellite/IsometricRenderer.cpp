@@ -3,6 +3,7 @@
 #include <cmath>
 #include <vector>
 #include <iostream>
+#include "Logger.h"
 
 IsometricRenderer::IsometricRenderer(int tileWidth, int tileHeight)
     : m_tileWidth(tileWidth), m_tileHeight(tileHeight),
@@ -511,4 +512,215 @@ void IsometricRenderer::renderFlatTile(SDL_Renderer* renderer, float x, float y,
     int centerX, int centerY) {
     // Просто вызываем существующий метод renderTile с нулевой высотой
     renderTile(renderer, x, y, 0.0f, color, centerX, centerY);
+}
+
+void IsometricRenderer::renderTileWithTexture(SDL_Renderer* renderer, float worldX, float worldY, float height,
+    SDL_Texture* texture, SDL_Color color, int centerX, int centerY) const {
+    // Проверка валидности рендерера
+    if (!renderer) {
+        return;
+    }
+
+    // Преобразуем координаты мира в экранные
+    int screenX, screenY;
+    worldToDisplay(worldX, worldY, height, centerX, centerY, screenX, screenY);
+
+    // Если текстура отсутствует или невалидна, используем стандартный метод рендеринга с цветом
+    if (!texture) {
+        renderTile(renderer, worldX, worldY, height, color, centerX, centerY);
+        return;
+    }
+
+    // Вычисляем размеры тайла с учетом масштаба камеры
+    int scaledWidth = getScaledSize(m_tileWidth);
+    int scaledHeight = getScaledSize(m_tileHeight);
+
+    // Определяем прямоугольник для отрисовки текстуры
+    SDL_Rect dstRect = {
+        screenX - scaledWidth / 2, // x
+        screenY - scaledHeight / 2, // y
+        scaledWidth, // width
+        scaledHeight // height
+    };
+
+    // Устанавливаем цвет для тонирования текстуры (если нужно)
+    // Проверяем код возврата для отладки
+    if (SDL_SetTextureColorMod(texture, color.r, color.g, color.b) != 0) {
+        LOG_WARNING("Failed to set texture color mod: " + std::string(SDL_GetError()));
+    }
+
+    if (SDL_SetTextureAlphaMod(texture, color.a) != 0) {
+        LOG_WARNING("Failed to set texture alpha mod: " + std::string(SDL_GetError()));
+    }
+
+    // Отрисовываем текстуру
+    if (SDL_RenderCopy(renderer, texture, nullptr, &dstRect) != 0) {
+        LOG_WARNING("Failed to render texture: " + std::string(SDL_GetError()));
+    }
+
+    // Сбрасываем модификацию цвета текстуры
+    SDL_SetTextureColorMod(texture, 255, 255, 255);
+    SDL_SetTextureAlphaMod(texture, 255);
+}
+
+void IsometricRenderer::renderVolumetricTileWithTexture(SDL_Renderer* renderer, float worldX, float worldY, float height,
+    SDL_Texture* topTexture, SDL_Texture* leftTexture, SDL_Texture* rightTexture,
+    SDL_Color topColor, SDL_Color leftColor, SDL_Color rightColor,
+    int centerX, int centerY) const {
+    // Проверка валидности рендерера
+    if (!renderer) {
+        return;
+    }
+
+    // Если нет ни одной текстуры, используем стандартный метод рендеринга
+    if (!topTexture && !leftTexture && !rightTexture) {
+        renderVolumetricTile(renderer, worldX, worldY, height,
+            topColor, leftColor, rightColor,
+            centerX, centerY);
+        return;
+    }
+
+    // Преобразуем координаты мира в экранные для верхней части тайла
+    int screenX, screenY;
+    worldToDisplay(worldX, worldY, height, centerX, centerY, screenX, screenY);
+
+    // Также получаем координаты нижней части тайла
+    int baseScreenX, baseScreenY;
+    worldToDisplay(worldX, worldY, 0, centerX, centerY, baseScreenX, baseScreenY);
+
+    // Вычисляем размеры тайла с учетом масштаба камеры
+    int scaledWidth = getScaledSize(m_tileWidth);
+    int scaledHeight = getScaledSize(m_tileHeight);
+
+    // Вычисляем высоту в пикселях
+    int heightPixels = baseScreenY - screenY;
+
+    // Проверка на отрицательную высоту для безопасности
+    if (heightPixels < 0) {
+        heightPixels = 0;
+    }
+
+    // Сначала рисуем правую грань (если она видна)
+    if (height > 0) {
+        if (rightTexture) {
+            // Прямоугольник для правой грани
+            SDL_Rect rightRect = {
+                screenX, // x
+                screenY, // y
+                scaledWidth / 2, // width (половина ширины тайла)
+                heightPixels + scaledHeight / 2 // height (высота + половина высоты тайла)
+            };
+
+            // Устанавливаем цвет для тонирования текстуры
+            SDL_SetTextureColorMod(rightTexture, rightColor.r, rightColor.g, rightColor.b);
+            SDL_SetTextureAlphaMod(rightTexture, rightColor.a);
+
+            // Отрисовываем текстуру с проверкой ошибок
+            if (SDL_RenderCopy(renderer, rightTexture, nullptr, &rightRect) != 0) {
+                LOG_WARNING("Failed to render right texture: " + std::string(SDL_GetError()));
+            }
+
+            // Сбрасываем модификацию цвета
+            SDL_SetTextureColorMod(rightTexture, 255, 255, 255);
+            SDL_SetTextureAlphaMod(rightTexture, 255);
+        }
+        else {
+            // Если текстуры нет, рисуем цветом
+            // Вершины для правой грани
+            SDL_Point rightFace[4];
+            rightFace[0] = { screenX, screenY }; // Верхняя левая
+            rightFace[1] = { screenX + scaledWidth / 2, screenY + scaledHeight / 2 }; // Верхняя правая
+            rightFace[2] = { screenX + scaledWidth / 2, baseScreenY + scaledHeight / 2 }; // Нижняя правая
+            rightFace[3] = { screenX, baseScreenY }; // Нижняя левая
+
+            // Отрисовываем правую грань цветом
+            SDL_SetRenderDrawColor(renderer, rightColor.r, rightColor.g, rightColor.b, rightColor.a);
+
+            for (int i = 0; i < 3; ++i) {
+                SDL_RenderDrawLine(renderer, rightFace[i].x, rightFace[i].y, rightFace[i + 1].x, rightFace[i + 1].y);
+            }
+            SDL_RenderDrawLine(renderer, rightFace[3].x, rightFace[3].y, rightFace[0].x, rightFace[0].y);
+        }
+    }
+
+    // Затем рисуем левую грань
+    if (height > 0) {
+        if (leftTexture) {
+            // Прямоугольник для левой грани
+            SDL_Rect leftRect = {
+                screenX - scaledWidth / 2, // x
+                screenY, // y
+                scaledWidth / 2, // width (половина ширины тайла)
+                heightPixels + scaledHeight / 2 // height (высота + половина высоты тайла)
+            };
+
+            // Устанавливаем цвет для тонирования текстуры
+            SDL_SetTextureColorMod(leftTexture, leftColor.r, leftColor.g, leftColor.b);
+            SDL_SetTextureAlphaMod(leftTexture, leftColor.a);
+
+            // Отрисовываем текстуру с проверкой ошибок
+            if (SDL_RenderCopy(renderer, leftTexture, nullptr, &leftRect) != 0) {
+                LOG_WARNING("Failed to render left texture: " + std::string(SDL_GetError()));
+            }
+
+            // Сбрасываем модификацию цвета
+            SDL_SetTextureColorMod(leftTexture, 255, 255, 255);
+            SDL_SetTextureAlphaMod(leftTexture, 255);
+        }
+        else {
+            // Если текстуры нет, рисуем цветом
+            // Вершины для левой грани
+            SDL_Point leftFace[4];
+            leftFace[0] = { screenX, screenY }; // Верхняя правая
+            leftFace[1] = { screenX - scaledWidth / 2, screenY + scaledHeight / 2 }; // Верхняя левая
+            leftFace[2] = { screenX - scaledWidth / 2, baseScreenY + scaledHeight / 2 }; // Нижняя левая
+            leftFace[3] = { screenX, baseScreenY }; // Нижняя правая
+
+            // Отрисовываем левую грань цветом
+            SDL_SetRenderDrawColor(renderer, leftColor.r, leftColor.g, leftColor.b, leftColor.a);
+
+            for (int i = 0; i < 3; ++i) {
+                SDL_RenderDrawLine(renderer, leftFace[i].x, leftFace[i].y, leftFace[i + 1].x, leftFace[i + 1].y);
+            }
+            SDL_RenderDrawLine(renderer, leftFace[3].x, leftFace[3].y, leftFace[0].x, leftFace[0].y);
+        }
+    }
+
+    // Наконец, рисуем верхнюю грань (всегда видна)
+    if (topTexture) {
+        // Прямоугольник для верхней грани
+        SDL_Rect topRect = {
+            screenX - scaledWidth / 2, // x
+            screenY - scaledHeight / 2, // y
+            scaledWidth, // width
+            scaledHeight // height
+        };
+
+        // Устанавливаем цвет для тонирования текстуры
+        SDL_SetTextureColorMod(topTexture, topColor.r, topColor.g, topColor.b);
+        SDL_SetTextureAlphaMod(topTexture, topColor.a);
+
+        // Отрисовываем текстуру с проверкой ошибок
+        if (SDL_RenderCopy(renderer, topTexture, nullptr, &topRect) != 0) {
+            LOG_WARNING("Failed to render top texture: " + std::string(SDL_GetError()));
+        }
+
+        // Сбрасываем модификацию цвета
+        SDL_SetTextureColorMod(topTexture, 255, 255, 255);
+        SDL_SetTextureAlphaMod(topTexture, 255);
+    }
+    else {
+        // Если текстуры нет, рисуем цветом
+        // Вершины для верхней грани (ромб)
+        SDL_Point topFace[5];
+        topFace[0] = { screenX, screenY - scaledHeight / 2 }; // Верхняя
+        topFace[1] = { screenX + scaledWidth / 2, screenY }; // Правая
+        topFace[2] = { screenX, screenY + scaledHeight / 2 }; // Нижняя
+        topFace[3] = { screenX - scaledWidth / 2, screenY }; // Левая
+        topFace[4] = { screenX, screenY - scaledHeight / 2 }; // Замыкание (верхняя)
+
+        // Отрисовываем верхнюю грань цветом
+        SDL_SetRenderDrawColor(renderer, topColor.r, topColor.g, topColor.b, topColor.a);
+        SDL_RenderDrawLines(renderer, topFace, 5);
+    }
 }

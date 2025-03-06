@@ -659,3 +659,7 @@ void RenderingSystem::renderPlayer(SDL_Renderer* renderer,
         priority
     );
 }
+
+TileRenderer* RenderingSystem::getTileRenderer() const {
+    return m_tileRenderer.get();
+}

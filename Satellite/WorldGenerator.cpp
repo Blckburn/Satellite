@@ -1196,3 +1196,72 @@ std::shared_ptr<Switch> WorldGenerator::createTestSwitch(float x, float y,
         std::to_string(x) + ", " + std::to_string(y) + ")");
     return switchObj;
 }
+
+
+std::pair<int, int> WorldGenerator::generateTexturedTestMap(int biomeType) {
+    LOG_INFO("Generating textured test map for biome: " + std::to_string(biomeType));
+
+    // Сначала генерируем стандартную карту
+    auto playerPos = generateTestMap(biomeType);
+
+    // ВРЕМЕННОЕ РЕШЕНИЕ: Пропускаем применение текстур для изоляции проблемы
+    LOG_INFO("DIAGNOSTIC: Skipping texture application for testing");
+
+    // При необходимости, загружаем текстуры, но не применяем их
+    if (m_engine && m_engine->getResourceManager()) {
+        auto resourceManager = m_engine->getResourceManager();
+        if (resourceManager) {
+            resourceManager.get()->loadTileTextures();
+
+            // Минимальный тест: проверяем получение текстуры без её применения
+            SDL_Texture* testTexture = resourceManager.get()->getTileTexture(TileType::FLOOR, biomeType);
+            if (testTexture) {
+                LOG_INFO("DIAGNOSTIC: Successfully retrieved test texture");
+            }
+            else {
+                LOG_ERROR("DIAGNOSTIC: Failed to retrieve test texture");
+            }
+        }
+    }
+
+    return playerPos;
+}
+
+void WorldGenerator::applyTilesToMap(int biomeType) {
+    LOG_INFO("DIAGNOSTIC: Called applyTilesToMap but using minimal version");
+
+    // Проверка наличия необходимых компонентов
+    if (!m_tileMap) {
+        LOG_ERROR("TileMap is nullptr");
+        return;
+    }
+
+    if (!m_engine) {
+        LOG_ERROR("Engine is nullptr");
+        return;
+    }
+
+    if (!m_parentScene) {
+        LOG_ERROR("ParentScene is nullptr");
+        return;
+    }
+
+    RenderingSystem* renderingSystem = m_parentScene->getRenderingSystem();
+    if (!renderingSystem) {
+        LOG_ERROR("RenderingSystem is nullptr");
+        return;
+    }
+
+    TileRenderer* tileRenderer = renderingSystem->getTileRenderer();
+    if (!tileRenderer) {
+        LOG_ERROR("TileRenderer is nullptr");
+        return;
+    }
+
+    // Очищаем тайлы, но не добавляем новые
+    tileRenderer->clear();
+
+    LOG_INFO("DIAGNOSTIC: Minimal applyTilesToMap completed successfully");
+}
+
+

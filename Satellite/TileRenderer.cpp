@@ -1,5 +1,6 @@
 ﻿#include "TileRenderer.h"
 #include <iostream>
+#include "Logger.h"
 
 TileRenderer::TileRenderer(IsometricRenderer* isoRenderer)
     : m_isoRenderer(isoRenderer) {
@@ -31,78 +32,79 @@ void TileRenderer::addVolumetricTile(float x, float y, float z,
         priority);
 }
 
+// Минимальная диагностическая версия метода render в TileRenderer.cpp
+
 void TileRenderer::render(SDL_Renderer* renderer, int centerX, int centerY) {
+    LOG_INFO("===== TileRenderer::render - DIAGNOSTICS =====");
+
     // Проверка наличия тайлов для рендеринга
     if (m_tiles.empty()) {
+        LOG_INFO("No tiles to render");
         return;
     }
 
-    // Z-СОРТИРОВКА для правильного порядка отображения тайлов
-    std::sort(m_tiles.begin(), m_tiles.end(),
-        [](const RenderableTile& a, const RenderableTile& b) {
-            // 1. Сортировка по приоритету
-            if (std::abs(a.renderPriority - b.renderPriority) > 0.001f) {
-                return a.renderPriority < b.renderPriority;
-            }
+    LOG_INFO("Tiles to render: " + std::to_string(m_tiles.size()));
 
-            // 2. НОВОЕ: Специальная обработка для воды - вода всегда отображается под объектами
-            // Этот код можно определить по цвету, но безопаснее передавать флаг "isWater"
-            bool aIsWater = (a.topColor.r < 100 && a.topColor.g > 150 && a.topColor.b > 200);
-            bool bIsWater = (b.topColor.r < 100 && b.topColor.g > 150 && b.topColor.b > 200);
+    // Проверяем валидность рендерера
+    if (!renderer) {
+        LOG_ERROR("Renderer is nullptr");
+        return;
+    }
 
-            if (aIsWater && !bIsWater) {
-                return true; // Вода рисуется под другими объектами
-            }
-            if (!aIsWater && bIsWater) {
-                return false; // Другие объекты рисуются поверх воды
-            }
+    // Проверяем наличие изометрического рендерера
+    if (!m_isoRenderer) {
+        LOG_ERROR("IsometricRenderer is nullptr");
+        return;
+    }
 
-            // 3. Если приоритеты равны, используем сумму координат (X+Y)
-            float sumA = a.worldX + a.worldY;
-            float sumB = b.worldX + b.worldY;
+    LOG_INFO("Rendering first tile...");
 
-            if (std::abs(sumA - sumB) > 0.01f) {
-                return sumA < sumB;
-            }
+    // Рендерим только первый тайл для тестирования
+    if (!m_tiles.empty()) {
+        const RenderableTile& tile = m_tiles[0];
 
-            // 4. При равных (X+Y) сортируем по высоте (Z)
-            if (std::abs(a.worldZ - b.worldZ) > 0.001f) {
-                return a.worldZ < b.worldZ;
-            }
+        // Выводим информацию о тайле для отладки
+        LOG_INFO("Tile info: x=" + std::to_string(tile.worldX) +
+            ", y=" + std::to_string(tile.worldY) +
+            ", z=" + std::to_string(tile.worldZ) +
+            ", type=" + std::to_string(static_cast<int>(tile.type)));
 
-            // 5. Крайний случай - объемные объекты поверх плоских
-            if (a.type != b.type) {
-                return a.type == RenderableTile::TileType::FLAT &&
-                    b.type == RenderableTile::TileType::VOLUMETRIC;
-            }
-
-            // 6. Детерминированный порядок для избежания "мерцания"
-            if (std::abs(a.worldX - b.worldX) > 0.001f) {
-                return a.worldX < b.worldX;
-            }
-
-            return a.worldY < b.worldY;
-        });
-
-    // Рендерим тайлы в отсортированном порядке
-    for (const auto& tile : m_tiles) {
-        if (tile.type == RenderableTile::TileType::FLAT) {
-            // Рендеринг плоского тайла
-            m_isoRenderer->renderTile(
-                renderer,
-                tile.worldX, tile.worldY, tile.worldZ,
-                tile.topColor,
-                centerX, centerY
-            );
+        // Проверяем наличие текстуры
+        if (tile.topTexture) {
+            LOG_INFO("Tile has texture");
         }
         else {
-            // Рендеринг объемного тайла
-            m_isoRenderer->renderVolumetricTile(
-                renderer,
-                tile.worldX, tile.worldY, tile.worldZ,
-                tile.topColor, tile.leftColor, tile.rightColor,
-                centerX, centerY
-            );
+            LOG_INFO("Tile has no texture, using color");
+        }
+
+        try {
+            if (tile.type == RenderableTile::TileType::FLAT) {
+                // Простой рендеринг одного тайла с цветом вместо текстуры для диагностики
+                LOG_INFO("Rendering flat tile with color only (ignoring texture for testing)");
+                m_isoRenderer->renderTile(
+                    renderer,
+                    tile.worldX, tile.worldY, tile.worldZ,
+                    tile.topColor,
+                    centerX, centerY
+                );
+                LOG_INFO("Flat tile rendered successfully");
+            }
+            else {
+                // Рендеринг объемного тайла цветом для диагностики
+                LOG_INFO("Rendering volumetric tile with color only (ignoring texture for testing)");
+                m_isoRenderer->renderVolumetricTile(
+                    renderer,
+                    tile.worldX, tile.worldY, tile.worldZ,
+                    tile.topColor, tile.leftColor, tile.rightColor,
+                    centerX, centerY
+                );
+                LOG_INFO("Volumetric tile rendered successfully");
+            }
+        }
+        catch (const std::exception& e) {
+            LOG_ERROR("Exception during tile rendering: " + std::string(e.what()));
         }
     }
+
+    LOG_INFO("===== TileRenderer::render - COMPLETED =====");
 }

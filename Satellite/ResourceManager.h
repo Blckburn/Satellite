@@ -8,6 +8,8 @@
 #include <memory>
 #include <iostream>
 #include "TextureManager.h"
+#include "TileType.h"
+
 
 /**
  * @brief Класс для управления ресурсами (текстурами, звуками, шрифтами и т.д.)
@@ -91,6 +93,20 @@ public:
      * @return Указатель на TextureManager
      */
     TextureManager* getTextureManager() const;
+
+    /**
+    * @brief Загружает стандартные текстуры тайлов
+    * @return true в случае успеха, false при ошибке
+    */
+    bool loadTileTextures();
+
+    /**
+     * @brief Получает текстуру тайла по типу и биому
+     * @param type Тип тайла
+     * @param biomeType Тип биома (1-Forest, 2-Desert, 3-Tundra, 4-Volcanic)
+     * @return Указатель на текстуру или nullptr, если текстура не найдена
+     */
+    SDL_Texture* getTileTexture(TileType type, int biomeType = 0) const;
 
 private:
     SDL_Renderer* m_renderer;                              ///< Указатель на SDL рендерер

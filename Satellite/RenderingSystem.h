@@ -53,6 +53,12 @@ public:
         std::shared_ptr<Player> player,
         int centerX, int centerY);
 
+    /**
+ * @brief Получить указатель на TileRenderer
+ * @return Указатель на TileRenderer
+ */
+    TileRenderer* getTileRenderer() const;
+
 private:
     /**
      * @brief Расчет приоритета визуального порядка для изометрической проекции

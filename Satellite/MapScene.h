@@ -55,6 +55,12 @@ public:
     void update(float deltaTime) override;
 
     /**
+     * @brief Тестовая функция для рендеринга текстур
+     */
+    void testTextureRendering();
+
+
+    /**
      * @brief Отрисовка сцены
      * @param renderer Указатель на SDL_Renderer
      */
@@ -180,6 +186,13 @@ public:
  * @return Указатель на EntityManager
  */
     std::shared_ptr<EntityManager> getEntityManager() const { return m_entityManager; }
+
+
+    /**
+    * @brief Получить указатель на систему рендеринга
+    * @return Указатель на RenderingSystem
+    */
+    RenderingSystem* getRenderingSystem();
 
 private:
     /**

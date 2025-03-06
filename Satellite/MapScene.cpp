@@ -22,6 +22,7 @@ MapScene::~MapScene() {
 bool MapScene::initialize() {
     std::cout << "MapScene::initialize() - Starting initialization" << std::endl;
 
+
     // 1. Инициализация изометрического рендерера
     m_isoRenderer = std::make_shared<IsometricRenderer>(64, 32);
 
@@ -90,13 +91,19 @@ bool MapScene::initialize() {
     // 6. Генерация тестовой карты
     generateTestMap();
 
+
     // 7. Настройка камеры для слежения за игроком
     m_camera->setTarget(&m_player->getPosition().x, &m_player->getPosition().y);
+
 
     m_renderingSystem = std::make_shared<RenderingSystem>(
         m_tileMap, m_tileRenderer, m_isoRenderer);
 
     m_uiManager = std::make_shared<UIManager>(m_engine);
+
+    std::cout << "MapScene initialized successfully" << std::endl;
+
+    testTextureRendering();
 
     std::cout << "MapScene initialized successfully" << std::endl;
 
@@ -401,22 +408,36 @@ else if (event.type == SDL_KEYUP && event.key.keysym.sym == SDLK_e) {
 }
 
 void MapScene::render(SDL_Renderer* renderer) {
+    // ВРЕМЕННОЕ РЕШЕНИЕ: Минимальный тест рендеринга
+
     // Получаем размеры окна
     int windowWidth, windowHeight;
     SDL_GetRendererOutputSize(renderer, &windowWidth, &windowHeight);
+    int centerX = windowWidth / 2;
+    int centerY = windowHeight / 2;
 
-    // Используем RenderingSystem для основного рендеринга
-    m_renderingSystem->render(renderer, m_camera, m_player, m_entityManager, m_currentBiome);
+    // Очищаем экран в черный цвет для тестирования
+    SDL_SetRenderDrawColor(renderer, 0, 0, 0, 255);
+    SDL_RenderClear(renderer);
 
-    // Используем UIManager для отрисовки интерфейса
-    m_uiManager->render(
-        renderer,
-        m_isoRenderer,
-        m_tileMap,
-        m_player,
-        m_interactionSystem,
-        m_showDebug
-    );
+    // Добавляем подробное логирование
+    static bool firstRender = true;
+    if (firstRender) {
+        LOG_INFO("===== DIAGNOSTICS: FIRST RENDER CALL =====");
+        firstRender = false;
+    }
+
+    // Минимальный рендеринг для тестирования - просто рисуем тайлы
+    try {
+        LOG_INFO("Rendering tiles...");
+        m_tileRenderer->render(renderer, centerX, centerY);
+        LOG_INFO("Tiles rendered successfully");
+    }
+    catch (const std::exception& e) {
+        LOG_ERROR("Exception during rendering: " + std::string(e.what()));
+    }
+
+    // Мы не вызываем сложные функции рендеринга, только минимальный тест
 }
 
 void MapScene::initializeDoors() {
@@ -443,13 +464,13 @@ void MapScene::generateTestMap() {
         }
     }
 
-    // Используем WorldGenerator для генерации карты
+    // Используем WorldGenerator для генерации карты с текстурами
     srand(static_cast<unsigned int>(time(nullptr)));
     int biomeIndex = rand() % 4 + 1; // 1-4 (FOREST, DESERT, TUNDRA, VOLCANIC)
     m_currentBiome = biomeIndex;
 
-    // Генерируем карту и получаем стартовую позицию игрока
-    auto playerStartPos = m_worldGenerator->generateTestMap(m_currentBiome);
+    // Генерируем карту с текстурами и получаем стартовую позицию игрока
+    auto playerStartPos = m_worldGenerator->generateTexturedTestMap(m_currentBiome);
     m_worldGenerator->generateDoors(0.4f, 8);
 
     // Устанавливаем игрока на стартовую позицию
@@ -463,11 +484,15 @@ void MapScene::generateTestMap() {
     // после того как WorldGenerator сгенерировал карту и добавил все объекты
     initializeDoors();
 
-    LOG_INFO("Test map generated with biome " + std::to_string(m_currentBiome) +
+    LOG_INFO("Textured test map generated with biome " + std::to_string(m_currentBiome) +
         " and player positioned at (" +
         std::to_string(playerStartPos.first) + ", " +
         std::to_string(playerStartPos.second) + ")");
 }
+RenderingSystem* MapScene::getRenderingSystem() {
+    return m_renderingSystem.get();
+}
+
 
 void MapScene::detectKeyInput() {
     // Этот метод теперь просто делегирует обработку клавиш игроку
@@ -626,4 +651,56 @@ void MapScene::update(float deltaTime) {
 
     // 5. Обновление базового класса
     Scene::update(deltaTime);
+}
+
+void MapScene::testTextureRendering() {
+    // Проверяем все компоненты
+    LOG_INFO("===== DIAGNOSTICS: TESTING TEXTURE RENDERING =====");
+
+    if (!m_engine) {
+        LOG_ERROR("Engine is nullptr");
+        return;
+    }
+
+    auto resourceManager = m_engine->getResourceManager();
+    if (!resourceManager) {
+        LOG_ERROR("ResourceManager is nullptr");
+        return;
+    }
+
+    if (!m_tileRenderer) {
+        LOG_ERROR("TileRenderer is nullptr");
+        return;
+    }
+
+    if (!m_isoRenderer) {
+        LOG_ERROR("IsometricRenderer is nullptr");
+        return;
+    }
+
+    // Загружаем текстуры
+    LOG_INFO("Loading textures...");
+    bool texturesLoaded = resourceManager.get()->loadTileTextures();
+    LOG_INFO(texturesLoaded ? "Textures loaded successfully" : "Some textures failed to load");
+
+    // Очищаем тайлы рендерера
+    LOG_INFO("Clearing tile renderer...");
+    m_tileRenderer->clear();
+
+    // Получаем тестовую текстуру
+    LOG_INFO("Getting test texture...");
+    SDL_Texture* testTexture = resourceManager.get()->getTileTexture(TileType::FLOOR, 0);
+    if (!testTexture) {
+        LOG_ERROR("Test texture is nullptr");
+        return;
+    }
+    LOG_INFO("Test texture retrieved successfully");
+
+    // Добавляем ОДИН плоский тайл для тестирования
+    LOG_INFO("Adding a single flat tile for testing...");
+    SDL_Color testColor = { 255, 255, 255, 255 };
+    m_tileRenderer->addFlatTile(10, 10, testTexture, testColor, 0.0f);
+    LOG_INFO("Test tile added successfully");
+
+    LOG_INFO("===== DIAGNOSTICS: TEST SETUP COMPLETE =====");
 }

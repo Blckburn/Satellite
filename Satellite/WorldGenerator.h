@@ -18,15 +18,17 @@ class Player;
  */
 class WorldGenerator {
 public:
+
+
     /**
-     * @brief Конструктор
-     * @param tileMap Указатель на карту тайлов
-     * @param engine Указатель на движок
-     * @param mapScene Указатель на сцену карты
-     * @param player Указатель на игрока
-     */
+* @brief Конструктор
+* @param tileMap Указатель на карту
+* @param engine Указатель на движок
+* @param parentScene Указатель на родительскую сцену
+* @param player Указатель на игрока
+*/
     WorldGenerator(std::shared_ptr<TileMap> tileMap, Engine* engine,
-        MapScene* mapScene, std::shared_ptr<Player> player);
+        MapScene* parentScene, std::shared_ptr<Player> player);
 
     /**
      * @brief Генерация тестовой карты
@@ -102,6 +104,21 @@ public:
         const std::string& name,
         Switch::SwitchType type);
 
+    /**
+ * @brief Создает тестовую карту с текстурированными тайлами
+ * @param biomeType Тип биома (1-Forest, 2-Desert, 3-Tundra, 4-Volcanic)
+ * @return Пара координат начальной позиции игрока
+ */
+    std::pair<int, int> generateTexturedTestMap(int biomeType);
+
+    /**
+     * @brief Применяет текстуры к существующей карте
+     * @param biomeType Тип биома (1-Forest, 2-Desert, 3-Tundra, 4-Volcanic)
+     */
+    void applyTilesToMap(int biomeType);
+
+
+
 private:
     /**
      * @brief Поиск углов комнат на карте для размещения терминалов
@@ -123,4 +140,6 @@ private:
     MapScene* m_mapScene;                   ///< Указатель на сцену карты
     std::shared_ptr<Player> m_player;       ///< Указатель на игрока
     int m_currentBiome;                     ///< Текущий биом
+    MapScene* m_parentScene;               ///< Указатель на родительскую сцену
+
 };

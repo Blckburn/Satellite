@@ -231,6 +231,41 @@ public:
     void renderFlatTile(SDL_Renderer* renderer, float x, float y,
         SDL_Texture* texture, SDL_Color color,
         int centerX = 0, int centerY = 0);
+    /**
+ * @brief Рендеринг плоского тайла с текстурой
+ * @param renderer SDL рендерер
+ * @param worldX X координата в мировом пространстве
+ * @param worldY Y координата в мировом пространстве
+ * @param height Высота тайла
+ * @param texture Текстура для верхней грани (nullptr для рендеринга цветом)
+ * @param color Цвет верхней грани (используется если texture == nullptr или для тонирования)
+ * @param centerX X координата центра экрана
+ * @param centerY Y координата центра экрана
+ */
+    void renderTileWithTexture(SDL_Renderer* renderer, float worldX, float worldY, float height,
+        SDL_Texture* texture, SDL_Color color, int centerX, int centerY) const;
+
+    /**
+     * @brief Рендеринг объемного тайла с текстурами
+     * @param renderer SDL рендерер
+     * @param worldX X координата в мировом пространстве
+     * @param worldY Y координата в мировом пространстве
+     * @param height Высота тайла
+     * @param topTexture Текстура для верхней грани (nullptr для рендеринга цветом)
+     * @param leftTexture Текстура для левой грани (nullptr для рендеринга цветом)
+     * @param rightTexture Текстура для правой грани (nullptr для рендеринга цветом)
+     * @param topColor Цвет верхней грани (используется если topTexture == nullptr или для тонирования)
+     * @param leftColor Цвет левой грани (используется если leftTexture == nullptr или для тонирования)
+     * @param rightColor Цвет правой грани (используется если rightTexture == nullptr или для тонирования)
+     * @param centerX X координата центра экрана
+     * @param centerY Y координата центра экрана
+     */
+    void renderVolumetricTileWithTexture(SDL_Renderer* renderer, float worldX, float worldY, float height,
+        SDL_Texture* topTexture, SDL_Texture* leftTexture, SDL_Texture* rightTexture,
+        SDL_Color topColor, SDL_Color leftColor, SDL_Color rightColor,
+        int centerX, int centerY) const;
+
+
 
 private:
     /**
@@ -253,7 +288,6 @@ private:
         const SDL_Point* points, const SDL_Point* texCoords,
         int count) const;
 
-private:
     int m_tileWidth;    ///< Ширина изометрического тайла
     int m_tileHeight;   ///< Высота изометрического тайла
 

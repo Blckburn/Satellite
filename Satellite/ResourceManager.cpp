@@ -1,5 +1,6 @@
 ﻿#include "ResourceManager.h"
 
+
 ResourceManager::ResourceManager(SDL_Renderer* renderer)
     : m_renderer(renderer) {
     m_textureManager = std::make_unique<TextureManager>(renderer);
@@ -154,4 +155,120 @@ SDL_Renderer* ResourceManager::getRenderer() const {
 
 TextureManager* ResourceManager::getTextureManager() const {
     return m_textureManager.get();
+}
+
+bool ResourceManager::loadTileTextures() {
+    if (!m_textureManager) {
+        std::cerr << "ERROR: TextureManager is not available for loading tile textures!" << std::endl;
+        return false;
+    }
+
+    // Выводим информацию о загрузке
+    std::cout << "Loading tile textures from 'assets/textures/' directory..." << std::endl;
+
+    // Будем отслеживать, какие текстуры загрузились успешно
+    bool allSuccessful = true;
+    std::vector<std::pair<std::string, std::string>> texturesToLoad = {
+        {"tile_floor", "assets/textures/tile_floor.png"},
+        {"tile_grass", "assets/textures/tile_grass.png"},
+        {"tile_ice", "assets/textures/tile_ice.png"},
+        {"tile_wall", "assets/textures/tile_wall.png"},
+        {"tile_water", "assets/textures/tile_water.png"}
+    };
+
+    for (const auto& texPair : texturesToLoad) {
+        const std::string& texId = texPair.first;
+        const std::string& texPath = texPair.second;
+
+        // Проверяем файл
+        SDL_RWops* file = SDL_RWFromFile(texPath.c_str(), "rb");
+        if (!file) {
+            std::cerr << "ERROR: Could not open texture file '" << texPath
+                << "'. SDL Error: " << SDL_GetError() << std::endl;
+            allSuccessful = false;
+            continue;
+        }
+        SDL_RWclose(file);
+
+        // Пытаемся загрузить текстуру
+        try {
+            bool success = m_textureManager->loadTexture(texId, texPath, 2);
+            if (success) {
+                std::cout << "Successfully loaded texture '" << texId
+                    << "' from file '" << texPath << "'" << std::endl;
+            }
+            else {
+                std::cerr << "ERROR: Failed to load texture '" << texId
+                    << "' from file '" << texPath << "'" << std::endl;
+                allSuccessful = false;
+            }
+        }
+        catch (const std::exception& e) {
+            std::cerr << "EXCEPTION loading texture '" << texId
+                << "': " << e.what() << std::endl;
+            allSuccessful = false;
+        }
+    }
+
+    // Дополнительно выводим информацию о результате
+    if (allSuccessful) {
+        std::cout << "All tile textures loaded successfully!" << std::endl;
+    }
+    else {
+        std::cerr << "WARNING: Some tile textures failed to load!" << std::endl;
+    }
+
+    return allSuccessful;
+}
+
+SDL_Texture* ResourceManager::getTileTexture(TileType type, int biomeType) const {
+    if (!m_textureManager) {
+        return nullptr;
+    }
+
+    // Определяем имя текстуры в зависимости от типа тайла и биома
+    std::string textureName;
+
+    switch (type) {
+    case TileType::FLOOR:
+        switch (biomeType) {
+        case 1: // FOREST
+            textureName = "tile_grass";
+            break;
+        case 3: // TUNDRA
+            textureName = "tile_ice";
+            break;
+        default:
+            textureName = "tile_floor";
+            break;
+        }
+        break;
+    case TileType::GRASS:
+        textureName = "tile_grass";
+        break;
+    case TileType::WALL:
+    case TileType::OBSTACLE:
+    case TileType::ROCK_FORMATION:
+        textureName = "tile_wall";
+        break;
+    case TileType::WATER:
+        textureName = "tile_water";
+        break;
+    case TileType::ICE:
+    case TileType::SNOW:
+        textureName = "tile_ice";
+        break;
+        // Для других типов тайлов можно добавить соответствующие текстуры
+    default:
+        // Для неизвестных типов возвращаем nullptr
+        return nullptr;
+    }
+
+    // Проверяем наличие текстуры перед возвратом
+    if (!m_textureManager->hasTexture(textureName)) {
+        return nullptr;
+    }
+
+    // Получаем текстуру по имени
+    return m_textureManager->getTexture(textureName);
 }
