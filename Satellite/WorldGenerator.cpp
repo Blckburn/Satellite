@@ -71,6 +71,13 @@ std::pair<float, float> WorldGenerator::generateTestMap(int biomeType) {
     // Генерируем карту с правильным типом биома
     roomGen.generateMap(m_tileMap.get(), roomGenBiomeType);
 
+    // Получаем фактическое количество сгенерированных комнат
+    int actualRoomCount = roomGen.getGeneratedRoomCount();
+    LOG_INFO("Generated " + std::to_string(actualRoomCount) + " rooms");
+
+    // Сохраняем количество комнат для использования при генерации переключателей
+    m_generatedRoomCount = actualRoomCount;
+
     // Сначала устанавливаем позицию игрока в центре карты
     float centerX = m_tileMap->getWidth() / 2.0f;
     float centerY = m_tileMap->getHeight() / 2.0f;
@@ -904,6 +911,9 @@ std::shared_ptr<Terminal> WorldGenerator::createTestTerminal(float x, float y,
     return terminal;
 }
 
+// В файле WorldGenerator.cpp найдем метод createSwitches и изменим логику
+// определения количества переключателей:
+
 void WorldGenerator::createSwitches() {
     if (!m_tileMap || !m_player) return;
 
@@ -927,26 +937,24 @@ void WorldGenerator::createSwitches() {
     // Параметры генерации переключателей
     int attempts = 0;
     int maxAttempts = 100;
-    int switchesToPlace = 0;
 
-    // Определяем количество переключателей в зависимости от биома
-    switch (m_currentBiome) {
-    case 1: // FOREST
-        switchesToPlace = 2; // В лесу мало переключателей
-        break;
-    case 2: // DESERT
-        switchesToPlace = 3; // В пустыне больше древних руин
-        break;
-    case 3: // TUNDRA
-        switchesToPlace = 3; // В тундре больше аномалий
-        break;
-    case 4: // VOLCANIC
-        switchesToPlace = 4; // В вулканических регионах много аномалий и руин
-        break;
-    default:
-        switchesToPlace = 2;
-        break;
+    // Используем фактическое количество сгенерированных комнат
+    int roomCount = m_generatedRoomCount;
+
+    // Если по какой-то причине число комнат не определено, используем минимальное значение
+    if (roomCount <= 0) {
+        roomCount = 5; // Предполагаем минимум 5 комнат по умолчанию
+        LOG_WARNING("Room count not available, using default: " + std::to_string(roomCount));
     }
+
+    // Распределяем по формуле: 1 переключатель на каждые 5 комнат (целочисленное деление)
+    int switchesToPlace = roomCount / 5;
+
+    // Гарантируем минимум 1 переключатель
+    switchesToPlace = std::max(1, switchesToPlace);
+
+    LOG_INFO("Generating " + std::to_string(switchesToPlace) +
+        " switches for " + std::to_string(roomCount) + " rooms");
 
     // Минимальное и максимальное расстояние от игрока
     float minDistanceFromPlayer = 8.0f;  // Не слишком близко к старту
@@ -956,6 +964,7 @@ void WorldGenerator::createSwitches() {
     int switchesPlaced = 0;
 
     while (switchesPlaced < switchesToPlace && attempts < maxAttempts) {
+        // Существующий код размещения переключателей...
         // Выбираем случайную позицию на карте
         int x = std::rand() % m_tileMap->getWidth();
         int y = std::rand() % m_tileMap->getHeight();

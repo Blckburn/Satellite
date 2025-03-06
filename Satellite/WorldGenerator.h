@@ -117,6 +117,7 @@ private:
     void placeTerminalRandomly(Terminal::TerminalType terminalType,
         const std::string& terminalName);
 
+    int m_generatedRoomCount = 0; ///< Количество сгенерированных комнат
     std::shared_ptr<TileMap> m_tileMap;    ///< Указатель на карту тайлов
     Engine* m_engine;                       ///< Указатель на движок
     MapScene* m_mapScene;                   ///< Указатель на сцену карты

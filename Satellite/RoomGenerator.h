@@ -5,6 +5,7 @@
 #include <random>
 #include <string>
 
+
 /**
  * @brief Класс для генерации комнатных карт в изометрическом пространстве
  */
@@ -84,6 +85,12 @@ public:
      * @param maxSize Максимальный размер комнаты
      */
     void setRoomSizeLimits(int minSize, int maxSize);
+
+    /**
+     * @brief Получение количества сгенерированных комнат
+     * @return Количество комнат
+     */
+    int getGeneratedRoomCount() const { return m_generatedRooms.size(); }
 
 private:
     /**
