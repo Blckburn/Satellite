@@ -6,16 +6,20 @@
 #include <vector>
 #include <string>
 #include <functional>
+#include <map>
+
 
 class Player;
 class TileMap;
 class MapScene;
+class WorldGenerator;
 
 /**
  * @brief Класс переключателя - интерактивного объекта, вызывающего изменения в окружении
  */
 class Switch : public InteractiveObject {
 public:
+    friend class WorldGenerator;
     /**
      * @brief Типы переключателей, определяющие их внешний вид и функциональность
      */
@@ -162,6 +166,37 @@ public:
      */
     void updateActivationHint();
 
+    /**
+     * @brief Проверка, нужно ли отображать символ-индикатор
+     * @return true, если символ должен отображаться
+     */
+    bool shouldShowIndicator() const { return !m_activated || m_effectActive; }
+
+    /**
+     * @brief Отметка о последнем взаимодействии с переключателем
+     */
+    void markAsRead() { /* Для переключателей это не требуется */ }
+
+
+    /**
+ * @brief Получение X-координаты назначения телепортации
+ * @return X-координата телепортации
+ */
+    int getTeleportDestX() const { return m_teleportDestX; }
+
+    /**
+     * @brief Получение Y-координаты назначения телепортации
+     * @return Y-координата телепортации
+     */
+    int getTeleportDestY() const { return m_teleportDestY; }
+
+    /**
+  * @brief Проверка, установлены ли координаты телепортации
+  * @return true, если координаты установлены
+  */
+    bool hasTeleportDestination() const { return m_teleportDestX >= 0 && m_teleportDestY >= 0; }
+
+
 private:
     /**
      * @brief Применить эффект переключателя к окружению
@@ -201,6 +236,14 @@ private:
     float m_effectTimer;                                  ///< Таймер действия эффекта
     bool m_effectActive;                                  ///< Активен ли эффект в данный момент
 
+    // Поля специфичные для телепортации
+    int m_teleportDestX = -1;                             ///< X-координата точки назначения телепортации
+    int m_teleportDestY = -1;                             ///< Y-координата точки назначения телепортации
+    SDL_Color m_originalTileColor = { 255, 255, 255, 255 }; ///< Оригинальный цвет тайла для восстановления
+
+    // Хранилище для измененных гравитационной аномалией тайлов
+    std::map<std::pair<int, int>, bool> m_affectedTiles;  ///< Карта тайлов, на которые повлияла аномалия (координаты -> исходная проходимость)
+
     // Внешние ссылки
     TileMap* m_tileMap;                                   ///< Указатель на карту для влияния на окружение
     MapScene* m_parentScene;                              ///< Указатель на родительскую сцену
@@ -212,4 +255,6 @@ private:
 
     std::string m_description;                            ///< Описание переключателя
     std::function<void(Player*, Switch*)> m_activationCallback; ///< Функция обратного вызова при активации
+
+
 };

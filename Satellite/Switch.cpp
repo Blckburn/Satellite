@@ -4,6 +4,7 @@
 #include "TileMap.h"
 #include "MapScene.h"
 #include <cmath>
+#include <map>
 
 Switch::Switch(const std::string& name, SwitchType type, TileMap* tileMap, MapScene* parentScene)
     : InteractiveObject(name, InteractiveType::SWITCH),
@@ -146,6 +147,7 @@ void Switch::cancelActivation() {
 
 void Switch::completeActivation() {
     if (!m_isActivating) {
+        LOG_WARNING("completeActivation called but m_isActivating is false");
         return;
     }
 
@@ -156,11 +158,18 @@ void Switch::completeActivation() {
     m_effectTimer = 0.0f;
 
     // Применяем эффект к окружению
+    LOG_INFO("Calling applyEffect() for " + getName());
     applyEffect();
+    LOG_INFO("applyEffect() completed for " + getName());
 
     // Вызываем функцию обратного вызова, если она задана
     if (m_activationCallback) {
+        LOG_INFO("Calling activation callback for " + getName());
         m_activationCallback(nullptr, this);
+        LOG_INFO("Activation callback completed for " + getName());
+    }
+    else {
+        LOG_WARNING("No activation callback set for " + getName());
     }
 
     // Обновляем подсказку
@@ -304,17 +313,34 @@ void Switch::updateVisualEffects(float deltaTime) {
 }
 
 void Switch::applyEffect() {
+    LOG_INFO("Entering applyEffect() for switch: " + getName() + " of type " + std::to_string(static_cast<int>(m_switchType)));
+
+    // Проверяем указатель на карту
+    if (!m_tileMap) {
+        LOG_ERROR("Cannot apply effect: m_tileMap is nullptr in " + getName());
+        return;
+    }
+
+    // Проверяем указатель на сцену для телепортов
+    if (m_switchType == SwitchType::TELEPORT_GATE && !m_parentScene) {
+        LOG_ERROR("Cannot apply teleport effect: m_parentScene is nullptr in " + getName());
+    }
+
     LOG_INFO("Applying effect of switch: " + getName());
+
 
     // Различные эффекты в зависимости от типа переключателя
     switch (m_switchType) {
     case SwitchType::GRAVITY_ANOMALY:
         // Для гравитационной аномалии - меняем свойства тайлов в зоне действия
-        // Например, делаем непроходимые тайлы проходимыми на время
+        // делаем непроходимые тайлы проходимыми на время
         if (m_tileMap) {
             // Получаем позицию переключателя
             int switchX = static_cast<int>(getPosition().x);
             int switchY = static_cast<int>(getPosition().y);
+
+            // Очищаем предыдущие записи при повторной активации
+            m_affectedTiles.clear();
 
             // Применяем эффект ко всем тайлам в зоне действия
             for (int y = switchY - m_effectRadius; y <= switchY + m_effectRadius; ++y) {
@@ -326,17 +352,26 @@ void Switch::applyEffect() {
                         float distSq = dx * dx + dy * dy;
                         if (distSq <= m_effectRadius * m_effectRadius) {
                             // Применяем эффект гравитационной аномалии
-                            // Здесь можно изменять свойства тайлов, например:
                             MapTile* tile = m_tileMap->getTile(x, y);
                             if (tile) {
                                 // Запоминаем исходное состояние тайла (для будущего восстановления)
-                                // В будущем можно добавить карту исходных состояний тайлов
+                                std::pair<int, int> tilePos(x, y);
+                                m_affectedTiles[tilePos] = tile->isWalkable();
 
-                                // Меняем свойства тайла (например, делаем непроходимые
-                                // препятствия временно проходимыми)
-                                if (!tile->isWalkable() && tile->getType() != TileType::WATER) {
+                                // Изменяем проходимость тайлов особым образом:
+                                // - Делаем стены и препятствия проходимыми
+                                // - Не трогаем водные тайлы (они остаются непроходимыми)
+                                if (!tile->isWalkable() &&
+                                    tile->getType() != TileType::WATER &&
+                                    tile->getType() != TileType::LAVA) {
                                     tile->setWalkable(true);
                                     LOG_INFO("Made tile walkable at: " + std::to_string(x) + ", " + std::to_string(y));
+                                }
+                                // Если это пол - повышаем его, создавая эффект "левитации"
+                                // (это только влияет на визуальное представление)
+                                else if (tile->isWalkable()) {
+                                    float currentHeight = tile->getHeight();
+                                    tile->setHeight(currentHeight + 0.2f);
                                 }
                             }
                         }
@@ -348,10 +383,90 @@ void Switch::applyEffect() {
 
     case SwitchType::TELEPORT_GATE:
         // Для телепортационных врат - активируем телепорт в другую зону
-        // Это может потребовать взаимодействия с MapScene
-        if (m_parentScene) {
-            // В будущей реализации: активация телепорта
-            LOG_INFO("Teleport gate activated, but functionality not yet implemented");
+        if (m_parentScene && m_tileMap) {
+            // Получаем позицию текущего переключателя
+            int switchX = static_cast<int>(getPosition().x);
+            int switchY = static_cast<int>(getPosition().y);
+
+            // Пытаемся найти подходящую целевую точку телепортации
+            // Ищем безопасное место для телепортации (проходимый тайл)
+            int targetX = 0, targetY = 0;
+            bool targetFound = false;
+
+            // 1. Сначала попробуем найти точку на противоположной стороне карты
+            int oppositeX = m_tileMap->getWidth() - 1 - switchX;
+            int oppositeY = m_tileMap->getHeight() - 1 - switchY;
+
+            // Ищем ближайший к противоположной точке проходимый тайл
+            for (int radius = 0; radius < 10 && !targetFound; radius++) {
+                for (int dy = -radius; dy <= radius && !targetFound; dy++) {
+                    for (int dx = -radius; dx <= radius && !targetFound; dx++) {
+                        // Проверяем только тайлы на текущем "радиусе" поиска
+                        if (std::abs(dx) != radius && std::abs(dy) != radius) continue;
+
+                        int checkX = oppositeX + dx;
+                        int checkY = oppositeY + dy;
+
+                        if (m_tileMap->isValidCoordinate(checkX, checkY) &&
+                            m_tileMap->isTileWalkable(checkX, checkY)) {
+                            targetX = checkX;
+                            targetY = checkY;
+                            targetFound = true;
+                            break;
+                        }
+                    }
+                }
+            }
+            // 2. Если не нашли подходящую точку, ищем любую безопасную точку вдали от текущей
+            if (!targetFound) {
+                LOG_INFO("Could not find point on opposite side of map, looking for any safe point");
+                // Пытаемся найти любой подходящий тайл на расстоянии не менее 10 от текущей позиции
+                for (int y = 0; y < m_tileMap->getHeight() && !targetFound; y++) {
+                    for (int x = 0; x < m_tileMap->getWidth() && !targetFound; x++) {
+                        if (m_tileMap->isTileWalkable(x, y)) {
+                            // Проверяем расстояние
+                            float dx = x - switchX;
+                            float dy = y - switchY;
+                            float distSq = dx * dx + dy * dy;
+
+                            if (distSq >= 100.0f) { // Минимум 10 тайлов в стороне
+                                targetX = x;
+                                targetY = y;
+                                targetFound = true;
+                                LOG_INFO("Found safe teleport destination at (" + std::to_string(x) + ", " + std::to_string(y) + ")");
+                                break;
+                            }
+                        }
+                    }
+                }
+            }
+
+            // 3. Если нашли подходящее место, сохраняем координаты для телепортации
+            if (targetFound) {
+                // Сохраняем точку телепортации
+                m_teleportDestX = targetX;
+                m_teleportDestY = targetY;
+
+                LOG_INFO("Teleport gate activated at (" + std::to_string(switchX) +
+                    ", " + std::to_string(switchY) + "), destination set to (" +
+                    std::to_string(targetX) + ", " + std::to_string(targetY) + ")");
+
+                // Отметим точку назначения визуально (например, особым цветом тайла)
+                if (MapTile* destTile = m_tileMap->getTile(targetX, targetY)) {
+                    // Сохраним оригинальный цвет, чтобы потом вернуть
+                    m_originalTileColor = destTile->getColor();
+
+                    // Подсветим тайл назначения фиолетовым цветом
+                    SDL_Color portalColor = { 180, 100, 220, 255 };
+                    destTile->setColor(portalColor);
+                }
+            }
+            else {
+                LOG_WARNING("Teleport gate activated but no suitable destination found");
+            }
+        }
+        else {
+            LOG_WARNING("Teleport gate activated but mapScene or tileMap is nullptr");
         }
         break;
 
@@ -388,14 +503,44 @@ void Switch::deactivateEffect() {
     case SwitchType::GRAVITY_ANOMALY:
         // Восстанавливаем измененные тайлы
         if (m_tileMap) {
-            // Аналогично applyEffect, но восстанавливаем исходные свойства
-            // В полной реализации нужно хранить и восстанавливать исходные состояния
-            LOG_INFO("Restoring normal gravity");
+            // Восстанавливаем все тайлы из m_affectedTiles
+            for (const auto& pair : m_affectedTiles) {
+                int x = pair.first.first;
+                int y = pair.first.second;
+                bool originalWalkable = pair.second;
+
+                if (m_tileMap->isValidCoordinate(x, y)) {
+                    MapTile* tile = m_tileMap->getTile(x, y);
+                    if (tile) {
+                        // Восстанавливаем проходимость
+                        if (tile->isWalkable() != originalWalkable) {
+                            tile->setWalkable(originalWalkable);
+                            LOG_INFO("Restored tile walkability at: " + std::to_string(x) + ", " + std::to_string(y));
+                        }
+
+                        // Если это был поднятый пол, опускаем его
+                        if (tile->isWalkable() && tile->getHeight() > 0.2f) {
+                            tile->setHeight(tile->getHeight() - 0.2f);
+                        }
+                    }
+                }
+            }
+
+            // Очищаем список затронутых тайлов
+            m_affectedTiles.clear();
+
+            LOG_INFO("Gravity restored to normal");
         }
         break;
 
     case SwitchType::TELEPORT_GATE:
-        // Деактивируем телепорт
+        // Восстанавливаем оригинальный цвет тайла назначения
+        if (m_tileMap && hasTeleportDestination()) {
+            if (MapTile* destTile = m_tileMap->getTile(m_teleportDestX, m_teleportDestY)) {
+                destTile->setColor(m_originalTileColor);
+                LOG_INFO("Teleport destination marker removed");
+            }
+        }
         LOG_INFO("Teleport gate deactivated");
         break;
 
@@ -417,7 +562,7 @@ void Switch::deactivateEffect() {
 
     // Обновляем цвет и подсказку
     setColor(m_inactiveColor);
-    setInteractionHint("Press E to activate " + getName());
+    updateActivationHint();
 }
 
 void Switch::displayInfo(SDL_Renderer* renderer, TTF_Font* font, int x, int y) {
@@ -492,3 +637,5 @@ void Switch::generateDescription() {
         break;
     }
 }
+
+

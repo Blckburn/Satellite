@@ -1052,22 +1052,26 @@ void WorldGenerator::createSwitches() {
 
             // Создаем имя для переключателя
             std::string switchName;
-            switch (switchType) {
-            case Switch::SwitchType::GRAVITY_ANOMALY:
+
+            if (switchType == Switch::SwitchType::GRAVITY_ANOMALY) {
                 switchName = "Gravity Anomaly";
-                break;
-            case Switch::SwitchType::TELEPORT_GATE:
+            }
+            else if (switchType == Switch::SwitchType::TELEPORT_GATE) {
                 switchName = "Ancient Teleport";
-                break;
-            case Switch::SwitchType::RESONANCE_STABILIZER:
+                LOG_INFO("Creating teleport switch at position (" + std::to_string(x) +
+                    ", " + std::to_string(y) + ")");
+            }
+            else if (switchType == Switch::SwitchType::RESONANCE_STABILIZER) {
                 switchName = "Resonance Stabilizer";
-                break;
-            case Switch::SwitchType::SECURITY_SYSTEM:
+            }
+            else if (switchType == Switch::SwitchType::SECURITY_SYSTEM) {
                 switchName = "Security Control";
-                break;
-            case Switch::SwitchType::ENERGY_NODE:
+            }
+            else if (switchType == Switch::SwitchType::ENERGY_NODE) {
                 switchName = "Energy Node";
-                break;
+            }
+            else {
+                switchName = "Unknown Switch";
             }
 
             // Создаем переключатель
@@ -1079,6 +1083,14 @@ void WorldGenerator::createSwitches() {
                 switchesPlaced++;
                 LOG_INFO("Placed " + switchName + " at position (" +
                     std::to_string(x) + ", " + std::to_string(y) + ")");
+
+                // Дополнительная информация для телепорта
+                if (switchName.find("Ancient Teleport") != std::string::npos) {
+                    LOG_INFO("Teleport created with mapScene=" +
+                        std::string(m_mapScene ? "valid" : "nullptr") +
+                        ", tileMap=" +
+                        std::string(m_tileMap ? "valid" : "nullptr"));
+                }
             }
         }
 
@@ -1106,10 +1118,61 @@ std::shared_ptr<Switch> WorldGenerator::createTestSwitch(float x, float y,
     }
 
     // Устанавливаем обратный вызов для обработки эффектов активации
-    switchObj->setActivationCallback([](Player* player, Switch* switchObj) {
-        // Здесь можно добавить специальную логику для разных типов переключателей
-        // Например, для телепортов - перемещение игрока
-        LOG_INFO("Switch activation callback: " + switchObj->getName());
+    switchObj->setActivationCallback([this, type](Player* player, Switch* switchObj) {
+        // Здесь добавляем специальную логику для разных типов переключателей
+        LOG_INFO("Activation callback triggered for " + std::string(switchObj ? switchObj->getName() : "unknown switch"));
+
+        // Используем if-else вместо switch для разных типов
+        if (type == Switch::SwitchType::TELEPORT_GATE) {
+            // Для телепортационных врат - телепортация игрока
+            if (switchObj && m_player) {
+                LOG_INFO("Processing teleport in callback...");
+
+                // Проверяем, установлены ли координаты телепортации
+                if (switchObj->hasTeleportDestination()) {
+                    // Получаем координаты назначения
+                    int destX = switchObj->getTeleportDestX();
+                    int destY = switchObj->getTeleportDestY();
+
+                    LOG_INFO("Teleport destination found: (" + std::to_string(destX) + ", " + std::to_string(destY) + ")");
+
+                    if (m_tileMap->isValidCoordinate(destX, destY)) {
+                        // Телепортируем игрока на целевую позицию
+                        LOG_INFO("Teleporting player from (" +
+                            std::to_string(m_player->getPosition().x) + ", " +
+                            std::to_string(m_player->getPosition().y) + ") to (" +
+                            std::to_string(destX) + ", " + std::to_string(destY) + ")");
+
+                        m_player->setPosition(static_cast<float>(destX),
+                            static_cast<float>(destY),
+                            0.0f);
+
+                        // Добавляем немного случайности к суб-позиции внутри тайла
+                        m_player->setSubX(0.5f);
+                        m_player->setSubY(0.5f);
+                    }
+                    else {
+                        LOG_WARNING("Invalid teleport destination coordinates!");
+                    }
+                }
+                else {
+                    LOG_WARNING("No teleport destination set for " + switchObj->getName());
+                }
+            }
+            else {
+                LOG_WARNING("Invalid player or switch pointer in teleport callback");
+            }
+        }
+        else if (type == Switch::SwitchType::SECURITY_SYSTEM) {
+            // Для систем безопасности - деактивация ловушек или открытие дверей
+            LOG_INFO("Security system deactivated by " +
+                std::string(player ? "player" : "unknown trigger"));
+
+            // Здесь можно добавить код для манипуляции дверями или другими объектами
+        }
+        else {
+            LOG_INFO("Switch activation callback: " + switchObj->getName());
+        }
         });
 
     // Добавляем переключатель на сцену
