@@ -8,6 +8,7 @@
 #include <ctime>
 #include <cmath>
 #include <random>
+#include "Switch.h"
 
 WorldGenerator::WorldGenerator(std::shared_ptr<TileMap> tileMap, Engine* engine,
     MapScene* mapScene, std::shared_ptr<Player> player)
@@ -130,6 +131,7 @@ std::pair<float, float> WorldGenerator::generateTestMap(int biomeType) {
     // Создаем интерактивные предметы на карте
     createInteractiveItems();
     createTerminals();
+    createSwitches();
 
     LOG_INFO("Generated test map with biome type: " + std::to_string(static_cast<int>(biomeType)));
 
@@ -900,4 +902,220 @@ std::shared_ptr<Terminal> WorldGenerator::createTestTerminal(float x, float y,
         std::to_string(static_cast<int>(type)) +
         " at position (" + std::to_string(x) + ", " + std::to_string(y) + ")");
     return terminal;
+}
+
+void WorldGenerator::createSwitches() {
+    if (!m_tileMap || !m_player) return;
+
+    // Хранение позиций, которые уже заняты другими объектами
+    std::set<std::pair<int, int>> usedPositions;
+
+    // Получаем список всех интерактивных объектов для проверки занятых позиций
+    if (m_mapScene) {
+        const auto& interactiveObjects = m_mapScene->getEntityManager()->getInteractiveObjects();
+        for (const auto& obj : interactiveObjects) {
+            int x = static_cast<int>(obj->getPosition().x);
+            int y = static_cast<int>(obj->getPosition().y);
+            usedPositions.insert({ x, y });
+        }
+    }
+
+    // Текущая позиция игрока
+    float playerX = m_player->getPosition().x;
+    float playerY = m_player->getPosition().y;
+
+    // Параметры генерации переключателей
+    int attempts = 0;
+    int maxAttempts = 100;
+    int switchesToPlace = 0;
+
+    // Определяем количество переключателей в зависимости от биома
+    switch (m_currentBiome) {
+    case 1: // FOREST
+        switchesToPlace = 2; // В лесу мало переключателей
+        break;
+    case 2: // DESERT
+        switchesToPlace = 3; // В пустыне больше древних руин
+        break;
+    case 3: // TUNDRA
+        switchesToPlace = 3; // В тундре больше аномалий
+        break;
+    case 4: // VOLCANIC
+        switchesToPlace = 4; // В вулканических регионах много аномалий и руин
+        break;
+    default:
+        switchesToPlace = 2;
+        break;
+    }
+
+    // Минимальное и максимальное расстояние от игрока
+    float minDistanceFromPlayer = 8.0f;  // Не слишком близко к старту
+    float maxDistanceFromPlayer = 20.0f; // Не слишком далеко
+
+    // Счетчик размещенных переключателей
+    int switchesPlaced = 0;
+
+    while (switchesPlaced < switchesToPlace && attempts < maxAttempts) {
+        // Выбираем случайную позицию на карте
+        int x = std::rand() % m_tileMap->getWidth();
+        int y = std::rand() % m_tileMap->getHeight();
+
+        // Проверяем расстояние до игрока
+        float distX = static_cast<float>(x) - playerX;
+        float distY = static_cast<float>(y) - playerY;
+        float distToPlayer = std::sqrt(distX * distX + distY * distY);
+
+        // Создаем пару для проверки уникальности позиции
+        std::pair<int, int> position(x, y);
+
+        // Проверяем, что тайл проходим, находится на подходящем расстоянии от игрока
+        // и эта позиция ещё не используется
+        if (m_tileMap->isValidCoordinate(x, y) &&
+            m_tileMap->isTileWalkable(x, y) &&
+            distToPlayer >= minDistanceFromPlayer &&
+            distToPlayer <= maxDistanceFromPlayer &&
+            usedPositions.find(position) == usedPositions.end()) {
+
+            // Запоминаем использованную позицию
+            usedPositions.insert(position);
+
+            // Выбираем тип переключателя в зависимости от биома
+            Switch::SwitchType switchType;
+
+            // Определяем вероятности для разных типов переключателей в зависимости от биома
+            int biomeBasedRand = rand() % 100;
+
+            switch (m_currentBiome) {
+            case 1: // FOREST
+                // В лесу больше гравитационных аномалий и стабилизаторов
+                if (biomeBasedRand < 40) {
+                    switchType = Switch::SwitchType::GRAVITY_ANOMALY;
+                }
+                else if (biomeBasedRand < 80) {
+                    switchType = Switch::SwitchType::RESONANCE_STABILIZER;
+                }
+                else {
+                    switchType = Switch::SwitchType::ENERGY_NODE;
+                }
+                break;
+
+            case 2: // DESERT
+                // В пустыне больше древних руин с телепортами и энергетическими узлами
+                if (biomeBasedRand < 40) {
+                    switchType = Switch::SwitchType::TELEPORT_GATE;
+                }
+                else if (biomeBasedRand < 70) {
+                    switchType = Switch::SwitchType::ENERGY_NODE;
+                }
+                else if (biomeBasedRand < 90) {
+                    switchType = Switch::SwitchType::SECURITY_SYSTEM;
+                }
+                else {
+                    switchType = Switch::SwitchType::GRAVITY_ANOMALY;
+                }
+                break;
+
+            case 3: // TUNDRA
+                // В тундре много аномалий и стабилизаторов
+                if (biomeBasedRand < 50) {
+                    switchType = Switch::SwitchType::RESONANCE_STABILIZER;
+                }
+                else if (biomeBasedRand < 80) {
+                    switchType = Switch::SwitchType::GRAVITY_ANOMALY;
+                }
+                else {
+                    switchType = Switch::SwitchType::TELEPORT_GATE;
+                }
+                break;
+
+            case 4: // VOLCANIC
+                // В вулканических регионах много энергетических узлов и систем безопасности
+                if (biomeBasedRand < 40) {
+                    switchType = Switch::SwitchType::ENERGY_NODE;
+                }
+                else if (biomeBasedRand < 70) {
+                    switchType = Switch::SwitchType::SECURITY_SYSTEM;
+                }
+                else if (biomeBasedRand < 90) {
+                    switchType = Switch::SwitchType::GRAVITY_ANOMALY;
+                }
+                else {
+                    switchType = Switch::SwitchType::RESONANCE_STABILIZER;
+                }
+                break;
+
+            default:
+                // По умолчанию - случайный тип
+                switchType = static_cast<Switch::SwitchType>(rand() % 5);
+                break;
+            }
+
+            // Создаем имя для переключателя
+            std::string switchName;
+            switch (switchType) {
+            case Switch::SwitchType::GRAVITY_ANOMALY:
+                switchName = "Gravity Anomaly";
+                break;
+            case Switch::SwitchType::TELEPORT_GATE:
+                switchName = "Ancient Teleport";
+                break;
+            case Switch::SwitchType::RESONANCE_STABILIZER:
+                switchName = "Resonance Stabilizer";
+                break;
+            case Switch::SwitchType::SECURITY_SYSTEM:
+                switchName = "Security Control";
+                break;
+            case Switch::SwitchType::ENERGY_NODE:
+                switchName = "Energy Node";
+                break;
+            }
+
+            // Создаем переключатель
+            auto switchObj = createTestSwitch(static_cast<float>(x), static_cast<float>(y),
+                switchName + "_" + std::to_string(switchesPlaced),
+                switchType);
+
+            if (switchObj) {
+                switchesPlaced++;
+                LOG_INFO("Placed " + switchName + " at position (" +
+                    std::to_string(x) + ", " + std::to_string(y) + ")");
+            }
+        }
+
+        attempts++;
+    }
+
+    LOG_INFO("Placed " + std::to_string(switchesPlaced) + " switches after " +
+        std::to_string(attempts) + " attempts");
+}
+
+std::shared_ptr<Switch> WorldGenerator::createTestSwitch(float x, float y,
+    const std::string& name,
+    Switch::SwitchType type) {
+
+    // Создаем новый переключатель
+    auto switchObj = std::make_shared<Switch>(name, type, m_tileMap.get(), m_mapScene);
+
+    // Устанавливаем позицию
+    switchObj->setPosition(x, y, 0.5f); // Высота над землей для видимости
+
+    // Инициализируем переключатель
+    if (!switchObj->initialize()) {
+        LOG_ERROR("Failed to initialize switch: " + name);
+        return nullptr;
+    }
+
+    // Устанавливаем обратный вызов для обработки эффектов активации
+    switchObj->setActivationCallback([](Player* player, Switch* switchObj) {
+        // Здесь можно добавить специальную логику для разных типов переключателей
+        // Например, для телепортов - перемещение игрока
+        LOG_INFO("Switch activation callback: " + switchObj->getName());
+        });
+
+    // Добавляем переключатель на сцену
+    m_mapScene->addInteractiveObject(switchObj);
+
+    LOG_INFO("Created switch: " + name + " at position (" +
+        std::to_string(x) + ", " + std::to_string(y) + ")");
+    return switchObj;
 }

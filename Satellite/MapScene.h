@@ -175,6 +175,12 @@ public:
  */
     Engine* getEngine() const { return m_engine; }
 
+    /**
+ * @brief Получить указатель на менеджер сущностей
+ * @return Указатель на EntityManager
+ */
+    std::shared_ptr<EntityManager> getEntityManager() const { return m_entityManager; }
+
 private:
     /**
      * @brief Отрисовка интерактивных объектов

@@ -7,6 +7,7 @@
 #include <memory>
 #include <vector>
 #include <set>
+#include "Switch.h"
 
 class Engine;
 class MapScene;
@@ -83,6 +84,23 @@ public:
     std::shared_ptr<Terminal> createTestTerminal(float x, float y,
         const std::string& name,
         Terminal::TerminalType type);
+
+    /**
+ * @brief Создание переключателей на карте
+ */
+    void createSwitches();
+
+    /**
+ * @brief Создание тестового переключателя
+ * @param x X-координата
+ * @param y Y-координата
+ * @param name Имя переключателя
+ * @param type Тип переключателя
+ * @return Указатель на созданный переключатель
+ */
+    std::shared_ptr<Switch> createTestSwitch(float x, float y,
+        const std::string& name,
+        Switch::SwitchType type);
 
 private:
     /**

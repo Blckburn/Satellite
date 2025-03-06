@@ -159,6 +159,7 @@
     <ClInclude Include="RoomGenerator.h" />
     <ClInclude Include="Satellite.h" />
     <ClInclude Include="Scene.h" />
+    <ClInclude Include="Switch.h" />
     <ClInclude Include="Terminal.h" />
     <ClInclude Include="TestScene.h" />
     <ClInclude Include="TileMap.h" />
@@ -186,6 +187,7 @@
     <ClCompile Include="ResourceManager.cpp" />
     <ClCompile Include="RoomGenerator.cpp" />
     <ClCompile Include="Scene.cpp" />
+    <ClCompile Include="Switch.cpp" />
     <ClCompile Include="Terminal.cpp" />
     <ClCompile Include="TestScene.cpp" />
     <ClCompile Include="TileMap.cpp" />
