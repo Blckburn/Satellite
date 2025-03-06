@@ -35,6 +35,11 @@ void UIManager::render(SDL_Renderer* renderer,
         interactionSystem->getCurrentTerminal()) {
         renderTerminalInfo(renderer, interactionSystem->getCurrentTerminal());
     }
+    // 4. Отрисовка информации переключателя
+    if (interactionSystem && interactionSystem->isDisplayingSwitchInfo() &&
+        interactionSystem->getCurrentSwitch()) {
+        renderSwitchInfo(renderer, interactionSystem->getCurrentSwitch());
+    }
 }
 
 void UIManager::renderInteractionPrompt(SDL_Renderer* renderer, const std::string& prompt) {
@@ -577,4 +582,208 @@ std::string UIManager::truncateText(const std::string& text, size_t maxLength) {
 
     // Отрезаем часть текста и добавляем многоточие
     return text.substr(0, maxLength - 3) + "...";
+}
+
+void UIManager::renderSwitchInfo(SDL_Renderer* renderer, std::shared_ptr<Switch> switchObj) {
+    if (!switchObj || !renderer) {
+        return;
+    }
+
+    // Получаем размеры окна
+    int windowWidth, windowHeight;
+    SDL_GetRendererOutputSize(renderer, &windowWidth, &windowHeight);
+
+    // Проверяем, доступен ли ResourceManager и есть ли шрифт
+    if (m_engine && m_engine->getResourceManager() &&
+        m_engine->getResourceManager()->hasFont("default")) {
+
+        // Получаем шрифт для отображения текста
+        TTF_Font* font = m_engine->getResourceManager()->getFont("default");
+        if (!font) return;
+
+        // Определяем текущий контент и заголовок
+        std::string headerText = switchObj->getInfoTitle();
+        std::string contentText = switchObj->getInfoDescription();
+
+        // Определяем цвет в зависимости от типа переключателя
+        SDL_Color textColor;
+        SDL_Color bgColor;
+
+        switch (switchObj->getSwitchType()) {
+        case Switch::SwitchType::GRAVITY_ANOMALY:
+            textColor = { 180, 200, 255, 255 }; // Светло-голубой
+            bgColor = { 0, 40, 80, 220 }; // Темно-синий фон
+            break;
+        case Switch::SwitchType::TELEPORT_GATE:
+            textColor = { 230, 200, 255, 255 }; // Светло-фиолетовый
+            bgColor = { 50, 0, 80, 220 }; // Темно-фиолетовый фон
+            break;
+        case Switch::SwitchType::RESONANCE_STABILIZER:
+            textColor = { 200, 255, 200, 255 }; // Светло-зеленый
+            bgColor = { 0, 50, 30, 220 }; // Темно-зеленый фон
+            break;
+        case Switch::SwitchType::SECURITY_SYSTEM:
+            textColor = { 255, 200, 200, 255 }; // Светло-красный
+            bgColor = { 60, 0, 20, 220 }; // Темно-красный фон
+            break;
+        case Switch::SwitchType::ENERGY_NODE:
+            textColor = { 255, 230, 180, 255 }; // Светло-янтарный
+            bgColor = { 60, 40, 0, 220 }; // Темно-янтарный фон
+            break;
+        default:
+            textColor = { 255, 255, 255, 255 }; // Белый
+            bgColor = { 0, 0, 0, 220 }; // Черный фон
+            break;
+        }
+
+        // Ширина и высота информационного окна
+        int infoWidth = windowWidth / 2 + 100;
+        int infoHeight = windowHeight / 2 + 50;
+
+        // Отрисовываем полупрозрачный прямоугольник для фона
+        SDL_Rect infoRect = {
+            windowWidth / 2 - infoWidth / 2,
+            windowHeight / 2 - infoHeight / 2,
+            infoWidth,
+            infoHeight
+        };
+
+        // Устанавливаем цвет фона
+        SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_BLEND);
+        SDL_SetRenderDrawColor(renderer, bgColor.r, bgColor.g, bgColor.b, bgColor.a);
+        SDL_RenderFillRect(renderer, &infoRect);
+
+        // Рисуем рамку для окна переключателя
+        SDL_SetRenderDrawColor(renderer, textColor.r, textColor.g, textColor.b, 180);
+        SDL_RenderDrawRect(renderer, &infoRect);
+
+        // Отображаем название переключателя вверху
+        std::string switchTitle = switchObj->getName();
+
+        // Рисуем заголовок
+        SDL_Surface* titleSurface = TTF_RenderText_Blended(font, switchTitle.c_str(), textColor);
+        if (titleSurface) {
+            SDL_Texture* titleTexture = SDL_CreateTextureFromSurface(renderer, titleSurface);
+            if (titleTexture) {
+                SDL_Rect titleRect;
+                titleRect.w = titleSurface->w;
+                titleRect.h = titleSurface->h;
+                titleRect.x = windowWidth / 2 - titleRect.w / 2;
+                titleRect.y = infoRect.y + 20;
+
+                SDL_RenderCopy(renderer, titleTexture, NULL, &titleRect);
+                SDL_DestroyTexture(titleTexture);
+            }
+            SDL_FreeSurface(titleSurface);
+        }
+
+        // Отрисовываем разделительную линию под заголовком
+        SDL_Rect dividerRect = {
+            infoRect.x + 40,
+            infoRect.y + 55,
+            infoRect.w - 80,
+            1
+        };
+        SDL_SetRenderDrawColor(renderer, textColor.r, textColor.g, textColor.b, 150);
+        SDL_RenderFillRect(renderer, &dividerRect);
+
+        // Максимальная ширина текста для размещения внутри окна
+        int maxTextWidth = infoWidth - 100; // Оставляем отступы по бокам
+
+        // Вертикальное смещение
+        int yOffset = 80;
+
+        // Отображаем заголовок записи
+        SDL_Surface* headerSurface = TTF_RenderText_Blended(font, headerText.c_str(), textColor);
+        if (headerSurface) {
+            SDL_Texture* headerTexture = SDL_CreateTextureFromSurface(renderer, headerSurface);
+            if (headerTexture) {
+                SDL_Rect headerRect;
+                headerRect.w = headerSurface->w;
+                headerRect.h = headerSurface->h;
+                headerRect.x = infoRect.x + 40;
+                headerRect.y = infoRect.y + yOffset;
+
+                SDL_RenderCopy(renderer, headerTexture, NULL, &headerRect);
+                SDL_DestroyTexture(headerTexture);
+            }
+            SDL_FreeSurface(headerSurface);
+        }
+
+        // Создаем цвет для содержимого (немного прозрачнее)
+        SDL_Color contentColor = { textColor.r, textColor.g, textColor.b, 200 };
+
+        // Разбиваем текст на строки, чтобы поместить их в окно
+        std::vector<std::string> lines;
+
+        // Разделяем текст на строки максимум по 40-45 символов
+        int maxLineLength = 40;
+
+        int startPos = 0;
+        while (startPos < contentText.length()) {
+            int endPos = startPos + maxLineLength;
+            if (endPos >= contentText.length()) {
+                // Если это конец текста, добавляем оставшуюся часть
+                lines.push_back(contentText.substr(startPos));
+                break;
+            }
+
+            // Находим последний пробел перед endPos
+            int lastSpace = contentText.rfind(' ', endPos);
+            if (lastSpace > startPos) {
+                // Если есть пробел, разбиваем по нему
+                lines.push_back(contentText.substr(startPos, lastSpace - startPos));
+                startPos = lastSpace + 1;
+            }
+            else {
+                // Если пробела нет, просто разбиваем по maxLineLength
+                lines.push_back(contentText.substr(startPos, maxLineLength));
+                startPos += maxLineLength;
+            }
+        }
+
+        // Отображаем каждую строку содержимого
+        int lineOffset = 30; // Начальное смещение от заголовка
+        for (const auto& line : lines) {
+            SDL_Surface* lineSurface = TTF_RenderText_Blended(font, line.c_str(), contentColor);
+            if (lineSurface) {
+                SDL_Texture* lineTexture = SDL_CreateTextureFromSurface(renderer, lineSurface);
+                if (lineTexture) {
+                    SDL_Rect lineRect;
+                    lineRect.w = lineSurface->w;
+                    lineRect.h = lineSurface->h;
+                    lineRect.x = infoRect.x + 45; // Небольшой отступ от края
+                    lineRect.y = infoRect.y + yOffset + lineOffset;
+
+                    SDL_RenderCopy(renderer, lineTexture, NULL, &lineRect);
+                    SDL_DestroyTexture(lineTexture);
+                }
+                SDL_FreeSurface(lineSurface);
+            }
+
+            lineOffset += 25; // Переходим к следующей строке
+        }
+
+        // Добавляем подсказку для закрытия внизу
+        SDL_Surface* promptSurface = TTF_RenderText_Blended(font, "Press E to close",
+            { textColor.r, textColor.g, textColor.b, 180 });
+        if (promptSurface) {
+            SDL_Texture* promptTexture = SDL_CreateTextureFromSurface(renderer, promptSurface);
+            if (promptTexture) {
+                SDL_Rect promptRect;
+                promptRect.w = promptSurface->w;
+                promptRect.h = promptSurface->h;
+                promptRect.x = windowWidth / 2 - promptRect.w / 2;
+                promptRect.y = infoRect.y + infoHeight - 25;
+
+                SDL_RenderCopy(renderer, promptTexture, NULL, &promptRect);
+                SDL_DestroyTexture(promptTexture);
+            }
+            SDL_FreeSurface(promptSurface);
+        }
+    }
+    else {
+        // Если шрифты недоступны, просто выводим в лог
+        LOG_INFO("Switch info display: " + switchObj->getName());
+    }
 }

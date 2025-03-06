@@ -58,6 +58,18 @@ void InteractionSystem::handleInteraction() {
                 return;
             }
         }
+        // Если отображается информация переключателя и найден ближайший объект
+        if (m_displayingSwitchInfo && m_currentSwitch && nearestObject) {
+            // Проверяем, является ли ближайший объект текущим переключателем
+            if (nearestObject.get() == m_currentSwitch.get()) {
+                // Закрываем окно переключателя при повторном нажатии E
+                m_displayingSwitchInfo = false;
+                m_currentSwitch = nullptr;
+                LOG_INFO("Switch info closed by pressing E");
+                return;
+            }
+        }
+
 
         if (nearestObject->isInteractable()) {
             // Проверяем, является ли объект дверью
@@ -109,6 +121,19 @@ void InteractionSystem::handleInteraction() {
                     m_showInteractionPrompt = true;
                     m_interactionPromptTimer = 0.0f;
                     m_interactionPrompt = actionMessage;
+                }
+            }
+            // Проверяем, является ли объект переключателем
+            else if (auto switchObj = std::dynamic_pointer_cast<Switch>(nearestObject)) {
+                // Вызываем метод взаимодействия
+                if (switchObj->interact(m_player.get())) {
+                    // Если переключатель отображает информацию, сохраняем его и устанавливаем флаг
+                    if (switchObj->isDisplayingInfo()) {
+                        m_currentSwitch = switchObj;
+                        m_displayingSwitchInfo = true;
+                        LOG_INFO("Displaying info for switch: " + switchObj->getName());
+                    }
+                    return;
                 }
             }
             else {
@@ -230,6 +255,15 @@ void InteractionSystem::update(float deltaTime) {
                 m_isDisplayingTerminalInfo = false;
                 LOG_INFO("Terminal info hidden (player moved away)");
             }
+        }
+    }
+
+    // Обновление отображения информации переключателя
+    if (m_displayingSwitchInfo && m_currentSwitch) {
+        // Если переключатель больше не отображает информацию, сбрасываем флаг
+        if (!m_currentSwitch->updateInfoDisplay(deltaTime)) {
+            m_displayingSwitchInfo = false;
+            m_currentSwitch = nullptr;
         }
     }
 
@@ -517,5 +551,14 @@ void InteractionSystem::notifyKeyReleased(SDL_Scancode scancode) {
                 }
             }
         }
+    }
+}
+
+void InteractionSystem::closeSwitchInfo() {
+    if (m_currentSwitch) {
+        m_currentSwitch->setDisplayingInfo(false);
+        m_displayingSwitchInfo = false;
+        m_currentSwitch = nullptr;
+        LOG_INFO("Switch info closed");
     }
 }

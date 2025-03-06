@@ -349,15 +349,21 @@ void MapScene::handleEvent(const SDL_Event& event) {
             break;
         }
 
-        case SDLK_ESCAPE:
-            // Если отображается информация терминала, скрываем её
-            if (m_interactionSystem->isDisplayingTerminalInfo()) {
-                m_interactionSystem->closeTerminalInfo();
-                LOG_INFO("Terminal info closed with ESC key");
-                return; // Прерываем обработку, чтобы ESC не влиял на другие системы
-            }
-            // В противном случае продолжаем стандартную обработку
-            break;
+case SDLK_ESCAPE:
+    // Если отображается информация терминала, скрываем её
+    if (m_interactionSystem->isDisplayingTerminalInfo()) {
+        m_interactionSystem->closeTerminalInfo();
+        LOG_INFO("Terminal info closed with ESC key");
+        return; // Прерываем обработку, чтобы ESC не влиял на другие системы
+    }
+    // Если отображается информация переключателя, скрываем её
+    else if (m_interactionSystem->isDisplayingSwitchInfo()) {
+        m_interactionSystem->closeSwitchInfo();
+        LOG_INFO("Switch info closed with ESC key");
+        return; // Прерываем обработку, чтобы ESC не влиял на другие системы
+    }
+    // В противном случае продолжаем стандартную обработку
+    break;
         }
     }
     // УЛУЧШЕННАЯ ОБРАБОТКА: Отпускание клавиши E для сброса флага m_requireKeyRelease у всех дверей

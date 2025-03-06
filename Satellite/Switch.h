@@ -197,6 +197,43 @@ public:
     bool hasTeleportDestination() const { return m_teleportDestX >= 0 && m_teleportDestY >= 0; }
 
 
+    /**
+ * @brief Получение заголовка для информационного окна
+ * @return Заголовок
+ */
+    std::string getInfoTitle() const;
+
+    /**
+     * @brief Получение описания эффекта
+     * @return Описание эффекта
+     */
+    std::string getInfoDescription() const;
+
+    /**
+     * @brief Проверка, нужно ли отображать информацию переключателя
+     * @return true, если нужно отображать информацию
+     */
+    bool isDisplayingInfo() const { return m_displayingInfo; }
+
+    /**
+     * @brief Задает флаг отображения информации
+     * @param displaying true для отображения, false для скрытия
+     */
+    void setDisplayingInfo(bool displaying) { m_displayingInfo = displaying; }
+
+    /**
+     * @brief Обновляет таймер отображения информации
+     * @param deltaTime Прошедшее время в секундах
+     * @return true, если информация все еще отображается
+     */
+    bool updateInfoDisplay(float deltaTime);
+
+    /**
+ * @brief Генерирует заголовок и описание для информационного окна
+ */
+    void generateInfoContent();
+
+
 private:
     /**
      * @brief Применить эффект переключателя к окружению
@@ -255,6 +292,7 @@ private:
 
     std::string m_description;                            ///< Описание переключателя
     std::function<void(Player*, Switch*)> m_activationCallback; ///< Функция обратного вызова при активации
-
+    std::string m_infoTitle;       ///< Заголовок информационного окна
+    std::string m_infoDescription; ///< Подробное описание эффекта для информационного окна
 
 };

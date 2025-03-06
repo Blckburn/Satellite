@@ -75,6 +75,13 @@ public:
      */
     static std::string truncateText(const std::string& text, size_t maxLength);
 
+    /**
+ * @brief Отрисовка информации переключателя
+ * @param renderer SDL рендерер
+ * @param switchObj Указатель на переключатель
+ */
+    void renderSwitchInfo(SDL_Renderer* renderer, std::shared_ptr<Switch> switchObj);
+
 private:
     Engine* m_engine;  ///< Указатель на движок
 };

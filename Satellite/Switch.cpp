@@ -99,21 +99,33 @@ bool Switch::interact(Player* player) {
 
     LOG_INFO("Switch interaction: " + getName());
 
-    // Если переключатель не активируется в данный момент и не активирован,
-    // начинаем процесс активации
-    if (!m_isActivating && !m_activated) {
-        return startActivation();
-    }
-    // Если переключатель уже активирован и имеет временный эффект, можем продлить
-    else if (m_activated && m_effectDuration > 0 && !m_isActivating) {
-        LOG_INFO("Extending effect duration for " + getName());
-        m_effectTimer = 0.0f; // Сбрасываем таймер эффекта
-        m_displayingInfo = true;
+    // Проверяем, отображается ли уже информация переключателя
+    if (m_displayingInfo) {
+        // Если информация уже отображается, просто возвращаем true
+        // Закрытие будет обрабатываться в InteractionSystem
         return true;
     }
 
-    return false;
+    // Если переключатель еще не активирован, активируем его
+    if (!m_activated) {
+        m_activated = true;
+        // Меняем цвет на активный для визуальной обратной связи
+        setColor(m_activeColor);
+        // Генерируем информацию для отображения
+        generateInfoContent();
+        LOG_INFO("Switch " + getName() + " activated, displaying info");
+    }
+    else {
+        LOG_INFO("Switch " + getName() + " info displayed again");
+    }
+
+    // В любом случае показываем информацию
+    m_displayingInfo = true;
+    m_activationTime = 0.0f;
+
+    return true;
 }
+
 
 bool Switch::startActivation() {
     if (m_activated || m_isActivating) {
@@ -154,35 +166,27 @@ void Switch::completeActivation() {
     LOG_INFO("Completing activation of switch: " + getName());
     m_isActivating = false;
     m_activated = true;
-    m_effectActive = true;
-    m_effectTimer = 0.0f;
 
-    // Применяем эффект к окружению
-    LOG_INFO("Calling applyEffect() for " + getName());
-    applyEffect();
-    LOG_INFO("applyEffect() completed for " + getName());
+    // Вместо активации эффекта теперь просто отображаем информацию
+    m_displayingInfo = true;
+    m_activationTime = 0.0f;
+
+    // Меняем цвет на активный для визуальной обратной связи
+    setColor(m_activeColor);
+
+    // Генерируем более подробное описание для информационного окна
+    generateInfoContent();
 
     // Вызываем функцию обратного вызова, если она задана
     if (m_activationCallback) {
         LOG_INFO("Calling activation callback for " + getName());
         m_activationCallback(nullptr, this);
-        LOG_INFO("Activation callback completed for " + getName());
-    }
-    else {
-        LOG_WARNING("No activation callback set for " + getName());
     }
 
     // Обновляем подсказку
-    if (m_effectDuration > 0) {
-        setInteractionHint("Effect active: " + std::to_string(static_cast<int>(m_effectDuration)) + " seconds");
-    }
-    else {
-        setInteractionHint("Effect active: permanent");
-    }
-
-    // Меняем цвет на активный
-    setColor(m_activeColor);
+    updateActivationHint();
 }
+
 
 void Switch::updateActivationHint() {
     if (m_isActivating) {
@@ -230,47 +234,8 @@ void Switch::update(float deltaTime) {
         m_pulsePhase -= 6.28f;
     }
 
-    // Если идет процесс активации
-    if (m_isActivating) {
-        // Увеличиваем таймер и прогресс
-        m_activationTimer += deltaTime;
-        m_activationProgress = std::min(1.0f, m_activationTimer / m_activationRequiredTime);
-
-        // Обновляем подсказку с текущим прогрессом
-        updateActivationHint();
-
-        // Если процесс завершен
-        if (m_activationProgress >= 1.0f) {
-            completeActivation();
-        }
-
-        // Обновляем визуальные эффекты в зависимости от прогресса
-        updateVisualEffects(deltaTime);
-    }
-
-    // Если переключатель активирован и эффект имеет ограниченную длительность
-    if (m_effectActive && m_effectDuration > 0) {
-        m_effectTimer += deltaTime;
-
-        // Обновляем подсказку с оставшимся временем
-        if (static_cast<int>(m_effectTimer) % 5 == 0) { // Обновляем каждые 5 секунд
-            updateActivationHint();
-        }
-
-        // Если время эффекта истекло
-        if (m_effectTimer >= m_effectDuration) {
-            deactivateEffect();
-        }
-    }
-
-    // Если переключатель отображает информацию, проверяем, не пора ли скрыть её
-    if (m_displayingInfo) {
-        m_activationTime += deltaTime;
-        if (m_activationTime > 5.0f) {
-            m_displayingInfo = false;
-            m_activationTime = 0.0f;
-        }
-    }
+    // Проверяем, не пора ли скрыть информационное окно
+    updateInfoDisplay(deltaTime);
 
     // Обновляем визуальные эффекты
     updateVisualEffects(deltaTime);
@@ -638,4 +603,67 @@ void Switch::generateDescription() {
     }
 }
 
+
+void Switch::generateInfoContent() {
+    // Генерируем заголовок информационного окна
+    switch (m_switchType) {
+    case SwitchType::GRAVITY_ANOMALY:
+        m_infoTitle = "Gravity Anomaly Control";
+        m_infoDescription = "Creates a field that modifies local gravity, allowing passage through normally impassable areas. Creates \"zero-g corridors\" for shortcuts.";
+        break;
+
+    case SwitchType::TELEPORT_GATE:
+        m_infoTitle = "Ancient Teleportation System";
+        m_infoDescription = "A node in a network of transportation devices left by previous civilization. Instantly transfers to a corresponding node elsewhere.";
+        break;
+
+    case SwitchType::RESONANCE_STABILIZER:
+        m_infoTitle = "Environmental Stabilizer";
+        m_infoDescription = "Generates protective field neutralizing hazardous environmental factors. Creates temporary safe zone from radiation and toxins.";
+        break;
+
+    case SwitchType::SECURITY_SYSTEM:
+        m_infoTitle = "Security Override";
+        m_infoDescription = "Interface with facility's defense systems. Deactivates security doors, turrets, and surveillance systems in the immediate area.";
+        break;
+
+    case SwitchType::ENERGY_NODE:
+        m_infoTitle = "Power Distribution Node";
+        m_infoDescription = "Controls power flow to facility systems. Restores energy to elevators, lighting and other electrical systems nearby.";
+        break;
+
+    default:
+        m_infoTitle = "Unknown Device";
+        m_infoDescription = "Device of unknown origin and purpose. Effects cannot be predicted.";
+        break;
+    }
+
+    // Добавляем общее предупреждение для всех переключателей
+    m_infoDescription += "\n\nSTATUS: Currently in diagnostic mode only.";
+}
+
+
+bool Switch::updateInfoDisplay(float deltaTime) {
+    if (m_displayingInfo) {
+        // Увеличиваем время отображения
+        m_activationTime += deltaTime;
+
+        // Проверяем, не истекло ли время отображения (10 секунд)
+        if (m_activationTime > 10.0f) {
+            m_displayingInfo = false;
+            return false;
+        }
+        return true;
+    }
+    return false;
+}
+
+
+std::string Switch::getInfoTitle() const {
+    return m_infoTitle.empty() ? getName() : m_infoTitle;
+}
+
+std::string Switch::getInfoDescription() const {
+    return m_infoDescription.empty() ? m_description : m_infoDescription;
+}
 

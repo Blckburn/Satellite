@@ -9,6 +9,7 @@
 #include <vector>
 #include <string>
 #include "PickupItem.h"  
+#include "Switch.h"
 
 /**
  * @brief Класс для управления взаимодействием между игроком и объектами мира
@@ -152,6 +153,22 @@ public:
  * @param scancode Код клавиши
  */
     void notifyKeyReleased(SDL_Scancode scancode);
+    /**
+ * @brief Проверка, отображается ли информация переключателя
+ * @return true, если информация отображается
+ */
+    bool isDisplayingSwitchInfo() const { return m_displayingSwitchInfo; }
+
+    /**
+     * @brief Получение текущего переключателя для отображения информации
+     * @return Указатель на текущий переключатель
+     */
+    std::shared_ptr<Switch> getCurrentSwitch() const { return m_currentSwitch; }
+
+    /**
+     * @brief Закрытие информации переключателя
+     */
+    void closeSwitchInfo();
 
 private:
     std::shared_ptr<Player> m_player;                  ///< Указатель на игрока
@@ -161,6 +178,8 @@ private:
     float m_interactionPromptTimer;                    ///< Таймер для отображения подсказки
     std::string m_interactionPrompt;                   ///< Текст подсказки для взаимодействия
     bool m_showInteractionPrompt;                      ///< Флаг отображения подсказки
+    std::shared_ptr<Switch> m_currentSwitch;      ///< Текущий переключатель для отображения информации
+    bool m_displayingSwitchInfo = false;          ///< Флаг отображения информации переключателя
 
     // Структура для хранения информации об открытых дверях
     struct OpenDoorInfo {
