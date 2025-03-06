@@ -187,6 +187,7 @@ private:
 
 
 private:
+    std::vector<Room> m_generatedRooms;  ///< Вектор сгенерированных комнат
     unsigned int m_seed;            ///< Сид генератора
     std::mt19937 m_rng;             ///< Генератор случайных чисел
     int m_maxRoomSize;              ///< Максимальный размер комнаты

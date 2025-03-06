@@ -48,6 +48,8 @@ bool RoomGenerator::generateMap(TileMap* tileMap, BiomeType biomeType)
 
     // 1. Очищаем карту
     clearMap(tileMap);
+    m_generatedRooms.clear();
+  
 
     // 2. Получаем размеры карты
     int width = tileMap->getWidth();
@@ -145,6 +147,11 @@ bool RoomGenerator::generateMap(TileMap* tileMap, BiomeType biomeType)
 
     LOG_INFO("Generated map with " + std::to_string(rooms.size()) + " rooms for biome: " +
         std::to_string(static_cast<int>(biomeType)));
+
+    m_generatedRooms = rooms; // Копируем все сгенерированные комнаты
+
+    // Выводим отладочную информацию
+    LOG_INFO("Saved " + std::to_string(m_generatedRooms.size()) + " rooms to m_generatedRooms");
 
     return true;
 }

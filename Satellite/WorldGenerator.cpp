@@ -71,9 +71,14 @@ std::pair<float, float> WorldGenerator::generateTestMap(int biomeType) {
     // Генерируем карту с правильным типом биома
     roomGen.generateMap(m_tileMap.get(), roomGenBiomeType);
 
+
+
     // Получаем фактическое количество сгенерированных комнат
     int actualRoomCount = roomGen.getGeneratedRoomCount();
     LOG_INFO("Generated " + std::to_string(actualRoomCount) + " rooms");
+
+    // Сохраняем количество комнат для использования при генерации переключателей
+    m_generatedRoomCount = actualRoomCount;
 
     // Сохраняем количество комнат для использования при генерации переключателей
     m_generatedRoomCount = actualRoomCount;
@@ -135,10 +140,13 @@ std::pair<float, float> WorldGenerator::generateTestMap(int biomeType) {
         LOG_WARNING("Could not find walkable tile for player spawn, using center position");
     }
 
+
+
     // Создаем интерактивные предметы на карте
     createInteractiveItems();
     createTerminals();
     createSwitches();
+
 
     LOG_INFO("Generated test map with biome type: " + std::to_string(static_cast<int>(biomeType)));
 
@@ -910,9 +918,6 @@ std::shared_ptr<Terminal> WorldGenerator::createTestTerminal(float x, float y,
         " at position (" + std::to_string(x) + ", " + std::to_string(y) + ")");
     return terminal;
 }
-
-// В файле WorldGenerator.cpp найдем метод createSwitches и изменим логику
-// определения количества переключателей:
 
 void WorldGenerator::createSwitches() {
     if (!m_tileMap || !m_player) return;
