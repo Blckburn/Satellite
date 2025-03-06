@@ -1,4 +1,4 @@
-﻿#include "TestScene.h"
+﻿/*#include "TestScene.h"
 #include "Entity.h"
 #include "Engine.h"
 #include "ResourceManager.h"
@@ -359,4 +359,5 @@ void TestScene::render(SDL_Renderer* renderer) {
 // Переопределяем метод addEntity для отслеживания добавления сущностей
 void TestScene::addEntity(std::shared_ptr<Entity> entity) {
     Scene::addEntity(entity);
-}
+}*/
+

@@ -162,6 +162,7 @@
     <ClInclude Include="Switch.h" />
     <ClInclude Include="Terminal.h" />
     <ClInclude Include="TestScene.h" />
+    <ClInclude Include="TextureManager.h" />
     <ClInclude Include="TileMap.h" />
     <ClInclude Include="TileRenderer.h" />
     <ClInclude Include="TileType.h" />
@@ -190,6 +191,7 @@
     <ClCompile Include="Switch.cpp" />
     <ClCompile Include="Terminal.cpp" />
     <ClCompile Include="TestScene.cpp" />
+    <ClCompile Include="TextureManager.cpp" />
     <ClCompile Include="TileMap.cpp" />
     <ClCompile Include="TileRenderer.cpp" />
     <ClCompile Include="UIManager.cpp" />
